@@ -94,11 +94,11 @@
   var LOGO = 'https://a.espncdn.com/i/teamlogos/soccer/500/2029.png';
   var gameN = 0, gameState = null;
 
-  function game(state, us, them, clock) {
+  function game(state, us, them, clock, phase, pens) {
     var abbr = (CONFIG.team && CONFIG.team.abbr) || 'TIME';
     gameState = {id: 'demo' + gameN, at: state === 'pre' ? Date.now() + 9 * 60000 : Date.now() - 30 * 60000, league: 'bra.1', state: state,
       clock: clock || '', detail: clock || '', us: {abbr: abbr, score: us}, them: {abbr: 'PAL', name: 'Palmeiras', score: them, logo: LOGO},
-      home: true, tv: 'Premiere, Globo'};
+      home: true, tv: 'Premiere, Globo', phase: phase || '', pens: pens || null};
     More.test.onGame(gameState);
   }
 
@@ -108,7 +108,16 @@
       ['Começou (ao vivo)', function () { game('in', 0, 0, "1'"); }],
       ['GOL do time', function () { var s = gameState ? gameState.us.score : 0; game('in', s + 1, gameState ? gameState.them.score : 0, "34'"); }],
       ['Gol do adversário', function () { game('in', gameState ? gameState.us.score : 0, (gameState ? gameState.them.score : 0) + 1, "52'"); }],
-      ['Fim de jogo', function () { game('post', gameState ? gameState.us.score : 1, gameState ? gameState.them.score : 0, 'Fim'); }],
+      ['Fim de jogo (placar atual)', function () { game('post', gameState ? gameState.us.score : 1, gameState ? gameState.them.score : 0, 'Fim'); }],
+      ['Final: vitória 🏆', function () { gameN++; game('in', 2, 1, "90'"); setTimeout(function () { game('post', 2, 1, 'Fim'); }, 400); }],
+      ['Final: derrota 😞', function () { gameN++; game('in', 0, 1, "90'"); setTimeout(function () { game('post', 0, 1, 'Fim'); }, 400); }],
+      ['Prorrogação ⏱', function () { gameN++; game('in', 1, 1, "90'"); setTimeout(function () { game('in', 1, 1, "92'", 'STATUS_OVERTIME'); }, 400); }],
+      ['Pênaltis 🥅', function () { if (!gameState || !/OVERTIME/.test(gameState.phase)) { gameN++; game('in', 1, 1, "120'", 'STATUS_OVERTIME'); } setTimeout(function () { game('in', 1, 1, '', 'STATUS_SHOOTOUT', {us: 0, them: 0}); }, 400); }],
+      ['Pênalti convertido ⚽', function () { var p = (gameState && gameState.pens) || {us: 0, them: 0}; game('in', 1, 1, '', 'STATUS_SHOOTOUT', {us: p.us + 1, them: p.them}); }],
+      ['Pênalti do adversário 🧤', function () { var p = (gameState && gameState.pens) || {us: 0, them: 0}; game('in', 1, 1, '', 'STATUS_SHOOTOUT', {us: p.us, them: p.them + 1}); }],
+      ['Vitória nos pênaltis 🏆', function () { gameN++; game('in', 1, 1, '', 'STATUS_SHOOTOUT', {us: 4, them: 3}); setTimeout(function () { game('post', 1, 1, 'Fim', 'STATUS_FINAL_PEN', {us: 5, them: 3}); }, 400); }],
+      ['Derrota nos pênaltis 😞', function () { gameN++; game('in', 1, 1, '', 'STATUS_SHOOTOUT', {us: 2, them: 3}); setTimeout(function () { game('post', 1, 1, 'Fim', 'STATUS_FINAL_PEN', {us: 2, them: 4}); }, 400); }],
+      ['Final: empate 🤝', function () { gameN++; game('in', 1, 1, "90'"); setTimeout(function () { game('post', 1, 1, 'Fim'); }, 400); }],
       ['Só a festa do gol', function () { More.test.goal('COR 2 × 1 PAL'); }]
     ]],
     ['🎵 Música e rádio', [

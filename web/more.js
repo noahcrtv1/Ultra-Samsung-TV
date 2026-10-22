@@ -163,17 +163,13 @@ var More = (function () {
       if (shownOn) {
         shownOn = false;
         var bigNow = hasBig(box);
-        fxRun(-1, bigNow ? 640 : 300, bigNow ? 132 : 52, function () { if (!shownOn) setClass(box, 'on', false); });
+        fxRun(-1, box.offsetWidth || (bigNow ? 640 : 300), bigNow ? 132 : 52, function () { if (!shownOn) setClass(box, 'on', false); });
       }
       return;
     }
-    if (!shownOn) {
-      // Entering: the liquid flows out first, the pill (with its content) appears where it lands.
-      shownOn = true;
-      var willBig = expanded || (!focused && !!flashing);
-      setClass(box, 'on', true);
-      fxRun(1, willBig ? 640 : 300, willBig ? 132 : 52);
-    } else setClass(box, 'on', true);
+    var entering = !shownOn;
+    shownOn = true;
+    setClass(box, 'on', true);
     var acts = expanded ? actions(a) : [];
     var key = JSON.stringify(a) + big + focused + act + acts.length + items.length + idx;
     if (key === shownKey) return;
@@ -191,8 +187,9 @@ var More = (function () {
       for (var i = 0; i < 4; i++) el('i', '', eq);
     } else if (a.right) el('div', 'right', box, a.right);
     if (focused && items.length > 1 && !expanded) el('div', 'dots', box, (idx + 1) + '/' + items.length);
+    var row = null;
     if (expanded) {
-      var row = el('div', 'acts', box);
+      row = el('div', 'acts', box);
       acts.forEach(function (x, n) {
         var b = el('div', 'iact' + (n === act ? ' focus' : ''), row, x[0]);
         b.onclick = function () { act = n; x[1](); render(); };
@@ -200,6 +197,21 @@ var More = (function () {
     }
     setClass(box, 'big', big);
     setClass(box, 'open', expanded);
+    // Text longer than the pill: it grows to fit (up to most of the screen), centered. Measured again once the
+    // text's own size transition (compact ↔ big) has finished.
+    function size() {
+      var need = 0;
+      [].forEach.call(t.children, function (c) { need = Math.max(need, c.scrollWidth); });
+      var room = (big ? 132 + 120 : 56 + 64) + (a.right && a.right !== 'eq' ? String(a.right).length * 11 : 0);
+      var w = Math.min(1300, Math.max(big ? 640 : 300, need + room + 16));
+      if (expanded && row) w = Math.max(w, Math.min(1300, row.scrollWidth + 60));
+      box.style.width = w + 'px';
+      box.style.marginLeft = -w / 2 + 'px';
+      return w;
+    }
+    var w = size(), mine = shownKey;
+    setTimeout(function () { if (shownKey === mine) size(); }, 560);
+    if (entering) fxRun(1, w, big ? 132 : 52);
   }
 
   function hasBig(b) { return (' ' + b.className + ' ').indexOf(' big ') >= 0; }
@@ -335,6 +347,9 @@ var More = (function () {
     return {
       id: e.id, at: Date.parse(e.date), league: league, name: e.name,
       state: st.type ? st.type.state : 'pre', clock: st.displayClock || '', detail: st.type ? st.type.shortDetail : '',
+      // ESPN's phase names: STATUS_HALFTIME, STATUS_OVERTIME / STATUS_EXTRA_TIME..., STATUS_SHOOTOUT, STATUS_FINAL_PEN
+      phase: st.type ? st.type.name || '' : '',
+      pens: us.shootoutScore !== undefined ? {us: +us.shootoutScore || 0, them: +them.shootoutScore || 0} : null,
       us: {abbr: ABBR, score: +(us.score && us.score.displayValue !== undefined ? us.score.displayValue : us.score) || 0, logo: us.team.logo},
       them: {abbr: them.team.abbreviation, name: them.team.shortDisplayName || them.team.displayName,
         score: +(them.score && them.score.displayValue !== undefined ? them.score.displayValue : them.score) || 0, logo: them.team.logo},
@@ -405,13 +420,26 @@ var More = (function () {
       return;
     }
     var line = g.home ? ABBR + ' ' + g.us.score + ' × ' + g.them.score + ' ' + g.them.abbr : g.them.abbr + ' ' + g.them.score + ' × ' + g.us.score + ' ' + ABBR;
+    var extra = /OVERTIME|EXTRA/i.test(g.phase), shoot = /SHOOTOUT|PEN/i.test(g.phase) && g.pens;
+    if (shoot) line += ' (' + tr('pên. ', 'pens ', 'pen. ') + (g.home ? g.pens.us + '-' + g.pens.them : g.pens.them + '-' + g.pens.us) + ')';
+    var wasExtra = was && /OVERTIME|EXTRA/i.test(was.phase), wasShoot = was && /SHOOTOUT|PEN/i.test(was.phase);
+    // Who won: the score, or the penalties when it was level.
+    var won = g.us.score > g.them.score || (g.us.score === g.them.score && g.pens && g.pens.us > g.pens.them);
+    var lost = g.us.score < g.them.score || (g.us.score === g.them.score && g.pens && g.pens.us < g.pens.them);
     if (g.state === 'in') {
-      set('game', {priority: 6, art: g.them.logo, text: line, right: g.clock || g.detail, color: GREEN, big: {title: line, sub: g.detail}});
+      var right = shoot ? tr('Pênaltis', 'Penalties', 'Penales') : extra ? tr('Prorr. ', 'ET ', 'Prórr. ') + (g.clock || '') : g.clock || g.detail;
+      set('game', {priority: 6, art: g.them.logo, text: line, right: right, color: GREEN, big: {title: line, sub: g.detail}});
       if (!was || was.state === 'pre') flash('game', {icon: '⚽', text: 'Começou!', big: {title: 'Começou: ' + vs, sub: g.tv ? 'Passa em ' + g.tv : ''}}, 8000);
+      else if (extra && !wasExtra) flash('game', {icon: '⏱', color: '#2A2200', text: tr('Prorrogação', 'Extra time', 'Prórroga'), big: {title: tr('Vai pra prorrogação!', 'Extra time!', '¡Prórroga!'), sub: line}}, 9000);
+      else if (shoot && !wasShoot) flash('game', {icon: '🥅', color: '#1A1030', text: tr('Pênaltis', 'Penalties', 'Penales'), big: {title: tr('Decisão nos pênaltis!', 'Penalty shootout!', '¡Penales!'), sub: line}}, 9000);
+      else if (shoot && was.pens && g.pens && (g.pens.us !== was.pens.us || g.pens.them !== was.pens.them))
+        flash('game', {icon: g.pens.us > was.pens.us ? '⚽' : '🧤', text: line, big: {title: g.pens.us > was.pens.us ? tr('Converteu!', 'Scored!', '¡Convirtió!') : tr('Pênalti do adversário', "Opponent's penalty", 'Penal rival'), sub: line}}, 5000);
     } else {
-      set('game', {priority: 2, art: g.them.logo, text: line, right: 'Fim', big: {title: 'Fim de jogo', sub: line}});
-      if (was && was.state === 'in') flash('game', {icon: g.us.score > g.them.score ? '🏆' : g.us.score === g.them.score ? '🤝' : '😞', text: 'Fim: ' + line,
-        big: {title: g.us.score > g.them.score ? tr('Vitória do ', 'Win for ', 'Victoria del ') + NICK + '!' : g.us.score === g.them.score ? 'Empate' : 'Derrota', sub: line}}, 12000);
+      set('game', {priority: 2, art: g.them.logo, text: line, right: 'Fim', color: won ? '#000' : lost ? '#3D0B0B' : '', big: {title: tr('Fim de jogo', 'Full time', 'Final'), sub: line}});
+      if (was && was.state === 'in') flash('game', {icon: won ? '🏆' : lost ? '😞' : '🤝', text: 'Fim: ' + line,
+        color: won ? '#000' : lost ? '#3D0B0B' : '#1C1C22',
+        big: {title: won ? tr('Vitória do ', 'Win for ', 'Victoria del ') + NICK + (g.pens ? tr(' nos pênaltis!', ' on penalties!', ' en penales!') : '!')
+          : lost ? tr('Derrota', 'Defeat', 'Derrota') + (g.pens ? tr(' nos pênaltis', ' on penalties', ' en penales') : '') : tr('Empate', 'Draw', 'Empate'), sub: line}}, 12000);
       setTimeout(function () { if (game === g) set('game', null); }, 2 * 3600000);
     }
     // Goals: compared with the last score seen for this game (kept across reloads).
