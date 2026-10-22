@@ -400,7 +400,7 @@
 
   // MARK: - Theme from the poster, and the trailer inside the focused card
 
-  var trailerTimer = 0, trailerCard = -1, focusedKey = '';
+  var trailerTimer = 0, trailerCard = -1, focusedKey = '', bgTimer = 0;
 
   function stopCardTrailer() {
     clearTimeout(trailerTimer);
@@ -450,8 +450,12 @@
     focusedKey = k;
     stopCardTrailer();
     if (!p || p.live || p.search) return;
-    if (p.backdrop) backdrop(Data.image(p.backdrop, 'w300'));   // the background takes the focused poster's colors
-    if (window.More) More.mood(p);
+    // The background takes the focused poster's colors and genre, once the focus rests (not on every press).
+    clearTimeout(bgTimer);
+    bgTimer = setTimeout(function () {
+      if (p.backdrop) backdrop(Data.image(p.backdrop, 'w300'));
+      if (window.More) More.mood(p);
+    }, 450);
     var index = st.card;
     trailerTimer = setTimeout(function () {
       Plus.trailer(p, function (key) {
