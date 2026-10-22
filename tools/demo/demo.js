@@ -121,9 +121,9 @@
         var a = {priority: 3, icon: '⛈', text: 'Tempestade às 18h', color: '#3A1F00', big: {title: 'Alerta: tempestade', sub: 'Previsão para 18h em ' + (CONFIG.city || 'sua cidade')}};
         More.island.set('storm', a); More.island.flash('storm', a, 10000);
       }],
-      ['Chuva na tela', function () { document.body.classList.toggle('raining'); }],
-      ['Raios', function () { document.body.classList.add('raining'); document.body.classList.toggle('storming'); }],
-      ['Limpar alerta', function () { More.island.set('storm', null); document.body.classList.remove('raining', 'storming'); }]
+      ['Chuva na tela', function () { More.test.rain(true, false); }],
+      ['Tempestade com raios', function () { More.test.rain(true, true); }],
+      ['Limpar (clima real)', function () { More.island.set('storm', null); More.test.rain(null); }]
     ]],
     ['🔔 Avisos', [
       ['Lembrete na tela', function () { Plus.showReminder({text: 'Tira o bolo do forno 🍰', from: 'Mãe', at: Date.now()}); }],

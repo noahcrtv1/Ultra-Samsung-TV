@@ -127,30 +127,25 @@ var More = (function () {
         g.fill();
       }
     }
-    var land = fxClamp((t - 0.5) / 0.5), wob = Math.sin(land * Math.PI * 2.5) * (1 - land) * 7, h = ph - wob * 0.6, rad = Math.min(h / 2, ph > 60 ? 46 : h / 2);
-    var x = CX - half - wob, w = pw + wob * 2, top = y + wob * 0.3;
-    g.beginPath();
-    g.moveTo(x + rad, top);
-    g.arcTo(x + w, top, x + w, top + h, rad);
-    g.arcTo(x + w, top + h, x, top + h, rad);
-    g.arcTo(x, top + h, x, top, rad);
-    g.arcTo(x, top, x + w, top, rad);
-    g.closePath();
-    g.fill();
+    // The pill itself is the real #island (with its content), moved by fxRun along the same path.
+    var land = fxClamp((t - 0.5) / 0.5), wob = Math.sin(land * Math.PI * 2.5) * (1 - land) * 7;
+    return {dy: y - py, sx: 1 + wob * 2 / pw, sy: 1 - wob * 0.6 / ph};
   }
 
   /** Runs the flow in (dir 1) or back up into the edge (dir -1), then done(). */
   function fxRun(dir, pw, ph, done) {
     fx = fx || $('islandfx');
+    var box = $('island');
     cancelAnimationFrame(fxRaf);
     fxBusy = true;
     var t0 = Date.now(), dur = dir > 0 ? 1000 : 650;
     (function frame() {
-      var t = fxClamp((Date.now() - t0) / dur);
-      fxDraw(dir > 0 ? t : 1 - t, pw, ph, 18);
+      var t = fxClamp((Date.now() - t0) / dur), m = fxDraw(dir > 0 ? t : 1 - t, pw, ph, 18);
+      box.style.webkitTransform = box.style.transform = 'translateY(' + m.dy + 'px) scale(' + m.sx + ',' + m.sy + ')';
       if (t < 1) { fxRaf = requestAnimationFrame(frame); return; }
       fxBusy = false;
-      if (dir < 0) fx.getContext('2d').clearRect(0, 0, 1920, 260);
+      box.style.webkitTransform = box.style.transform = '';
+      fx.getContext('2d').clearRect(0, 0, 1920, 260);
       if (done) done();
     })();
   }
@@ -168,8 +163,7 @@ var More = (function () {
       if (shownOn) {
         shownOn = false;
         var bigNow = hasBig(box);
-        setClass(box, 'on', false);
-        fxRun(-1, bigNow ? 640 : 300, bigNow ? 132 : 52);
+        fxRun(-1, bigNow ? 640 : 300, bigNow ? 132 : 52, function () { if (!shownOn) setClass(box, 'on', false); });
       }
       return;
     }
@@ -177,11 +171,9 @@ var More = (function () {
       // Entering: the liquid flows out first, the pill (with its content) appears where it lands.
       shownOn = true;
       var willBig = expanded || (!focused && !!flashing);
-      fxRun(1, willBig ? 640 : 300, willBig ? 132 : 52, function () {
-        setClass(box, 'on', shownOn);
-        fx.getContext('2d').clearRect(0, 0, 1920, 260);
-      });
-    } else if (!fxBusy) setClass(box, 'on', true);
+      setClass(box, 'on', true);
+      fxRun(1, willBig ? 640 : 300, willBig ? 132 : 52);
+    } else setClass(box, 'on', true);
     var acts = expanded ? actions(a) : [];
     var key = JSON.stringify(a) + big + focused + act + acts.length + items.length + idx;
     if (key === shownKey) return;
@@ -494,7 +486,10 @@ var More = (function () {
 
   var stormShown = stored('stormShown') || 0;
 
+  var weatherTest = null;   // {rain, storm} from the demo's test menu, instead of the real weather
+
   function weather() {
+    if (weatherTest) { setClass(document.body, 'raining', weatherTest.rain); setClass(document.body, 'storming', weatherTest.storm); return; }
     var w = Data.weatherNow();
     if (!w) return;
     var raining = (w.code >= 51 && w.code <= 67) || (w.code >= 80 && w.code <= 82) || w.code >= 95;
@@ -545,9 +540,9 @@ var More = (function () {
   function hideWelcome() { clearTimeout(welcomeTimer); setClass($('welcome'), 'on', false); }
   function welcomeOn() { var b = $('welcome'); return b && (' ' + b.className + ' ').indexOf(' on ') >= 0; }
 
-  function nightSummary() {
+  function nightSummary(force) {
     var d = new Date();
-    if (d.getHours() !== 23 || stored('night') === today()) return;
+    if (!force && (d.getHours() !== 23 || stored('night') === today())) return;
     store('night', today());
     var w = Data.weatherNow(), parts = [];
     if (game && new Date(game.at).toDateString() === d.toDateString() && game.state === 'post') {
@@ -646,6 +641,7 @@ var More = (function () {
       if (welcomeOn()) { hideWelcome(); return true; }
       return false;
     },
-    test: {goal: goal, onGame: onGame, stillThere: function () { offTimer = 0; checkIdleNow(); }, weather: weather, welcome: function () { store('welcomed', ''); welcome(0); }, night: function () { store('night', ''); nightSummary(); }}
+    test: {goal: goal, onGame: onGame, stillThere: function () { offTimer = 0; checkIdleNow(); }, weather: weather, welcome: function () { store('welcomed', ''); welcome(0); }, night: function () { nightSummary(true); },
+      rain: function (rain, storm) { weatherTest = rain === null ? null : {rain: !!rain, storm: !!storm}; weather(); }}
   };
 })();
