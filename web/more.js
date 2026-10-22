@@ -413,8 +413,9 @@ var More = (function () {
     var vs = (g.home ? ABBR + ' × ' + g.them.abbr : g.them.abbr + ' × ' + ABBR);
     if (g.state === 'pre') {
       var min = Math.max(0, Math.round((g.at - Date.now()) / 60000));
-      set('game', {priority: 4, art: g.them.logo, text: vs + (min ? ' em ' + min + ' min' : ' agora'), right: '⚽', sub: g.tv,
-        big: {title: 'Pré-jogo: ' + vs, sub: (g.tv ? g.tv + ' · ' : '') + hhmm(g.at)}});
+      set('game', {priority: 4, art: g.them.logo, text: vs, right: countdown(g.at), sub: g.tv,
+        big: {title: 'Pré-jogo: ' + vs, sub: (g.tv ? g.tv + ' · ' : '') + tr('Começa às ', 'Kickoff ', 'Empieza a las ') + hhmm(g.at)}});
+      startCountdown();
       if (min <= 10 && stored('pregame') !== g.id) {
         store('pregame', g.id);
         ping(CONFIG.voiceMonkeyPregameUrl);
@@ -452,6 +453,27 @@ var More = (function () {
     score = {};
     score[g.id] = {us: g.us.score, them: g.them.score};
     store('score', score);
+  }
+
+  /** "1h 05", "09:42", "00:07": the time left to kickoff. */
+  function countdown(at) {
+    var left = Math.max(0, Math.round((at - Date.now()) / 1000)), h = Math.floor(left / 3600), m = Math.floor(left % 3600 / 60), sec = left % 60;
+    function two(n) { return (n < 10 ? '0' : '') + n; }
+    return h ? h + 'h ' + two(m) : two(m) + ':' + two(sec);
+  }
+
+  // Ticks the pre-game countdown on the island every second until kickoff.
+  var countTimer = 0;
+  function startCountdown() {
+    if (countTimer) return;
+    countTimer = setInterval(function () {
+      var a = activities.game;
+      if (!game || game.state !== 'pre' || !a) { clearInterval(countTimer); countTimer = 0; return; }
+      var c = countdown(game.at);
+      a.right = c;
+      if (flashing && flashing.id === 'game') flashing.right = c;
+      render();
+    }, 1000);
   }
 
   function goal(line) {
