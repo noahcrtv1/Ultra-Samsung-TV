@@ -89,8 +89,88 @@
     setInterval(song, 180000);
   }
 
+  // MARK: - Test menu: fire everything the Dynamic Island and the automations do
+
+  var LOGO = 'https://a.espncdn.com/i/teamlogos/soccer/500/2029.png';
+  var gameN = 0, gameState = null;
+
+  function game(state, us, them, clock) {
+    var abbr = (CONFIG.team && CONFIG.team.abbr) || 'TIME';
+    gameState = {id: 'demo' + gameN, at: state === 'pre' ? Date.now() + 9 * 60000 : Date.now() - 30 * 60000, league: 'bra.1', state: state,
+      clock: clock || '', detail: clock || '', us: {abbr: abbr, score: us}, them: {abbr: 'PAL', name: 'Palmeiras', score: them, logo: LOGO},
+      home: true, tv: 'Premiere, Globo'};
+    More.test.onGame(gameState);
+  }
+
+  var TESTS = [
+    ['⚽ Jogo do time', [
+      ['Pré-jogo (9 min)', function () { gameN++; game('pre', 0, 0); }],
+      ['Começou (ao vivo)', function () { game('in', 0, 0, "1'"); }],
+      ['GOL do time', function () { var s = gameState ? gameState.us.score : 0; game('in', s + 1, gameState ? gameState.them.score : 0, "34'"); }],
+      ['Gol do adversário', function () { game('in', gameState ? gameState.us.score : 0, (gameState ? gameState.them.score : 0) + 1, "52'"); }],
+      ['Fim de jogo', function () { game('post', gameState ? gameState.us.score : 1, gameState ? gameState.them.score : 0, 'Fim'); }],
+      ['Só a festa do gol', function () { More.test.goal('COR 2 × 1 PAL'); }]
+    ]],
+    ['🎵 Música e rádio', [
+      ['Música no Spotify', function () { var s = ['Blinding Lights', 'The Weeknd']; More.island.set('music', {priority: 1, icon: '🎵', text: s[0], sub: s[1], right: 'eq', big: {title: s[0], sub: s[1] + ' · Spotify'}}); More.island.flash('music', {icon: '🎵', text: s[0], big: {title: s[0], sub: s[1] + ' · Spotify'}}, 6000); }],
+      ['Parar música', function () { More.island.set('music', null); }],
+      ['Abrir rádio do mundo', function () { Fun.relax(); setTimeout(function () { FreeMyTV.press(13); }, 300); }]
+    ]],
+    ['⛈ Clima', [
+      ['Alerta de temporal', function () {
+        var a = {priority: 3, icon: '⛈', text: 'Tempestade às 18h', color: '#3A1F00', big: {title: 'Alerta: tempestade', sub: 'Previsão para 18h em ' + (CONFIG.city || 'sua cidade')}};
+        More.island.set('storm', a); More.island.flash('storm', a, 10000);
+      }],
+      ['Chuva na tela', function () { document.body.classList.toggle('raining'); }],
+      ['Raios', function () { document.body.classList.add('raining'); document.body.classList.toggle('storming'); }],
+      ['Limpar alerta', function () { More.island.set('storm', null); document.body.classList.remove('raining', 'storming'); }]
+    ]],
+    ['🔔 Avisos', [
+      ['Lembrete na tela', function () { Plus.showReminder({text: 'Tira o bolo do forno 🍰', from: 'Mãe', at: Date.now()}); }],
+      ['Resumo da noite', function () { More.test.night(); }],
+      ['Estreia hoje', function () { More.island.flash('premiere', {icon: '🍿', text: 'Estreia hoje: Duna 3', big: {title: 'Estreia hoje: Duna 3', sub: 'Hoje!'}}, 8000); }],
+      ['Contagem de estreia', function () { More.island.set('premiere', {priority: 0.5, icon: '🎟', text: 'Duna 3 em 12 dias', big: {title: 'Duna 3 em 12 dias', sub: '18 de dez.'}}); }]
+    ]],
+    ['🏠 Tela', [
+      ['Boas-vindas', function () { More.test.welcome(); }],
+      ['“Ainda está aí?”', function () { More.test.stillThere(); }],
+      ['Focar a ilha (↑)', function () { var F = FreeMyTV; F.state.zone = 'top'; F.state.top = 0; F.move(0, -1); }],
+      ['Vitrine', function () { FreeMyTV.showSaver(); }],
+      ['O que ver hoje?', function () { Fun.whatToWatch(); }],
+      ['Mandar vídeo (YouTube)', function () { Plus.playCast({kind: 'youtube', id: 'dQw4w9WgXcQ', at: Date.now()}); }]
+    ]]
+  ];
+
+  function testMenu() {
+    var btn = document.createElement('button');
+    btn.id = 'demo-test';
+    btn.textContent = '🧪 Testar';
+    document.body.appendChild(btn);
+    var panel = document.createElement('div');
+    panel.id = 'demo-panel';
+    TESTS.forEach(function (group) {
+      var h = document.createElement('div');
+      h.className = 'grp';
+      h.textContent = group[0];
+      panel.appendChild(h);
+      group[1].forEach(function (t) {
+        var b = document.createElement('button');
+        b.textContent = t[0];
+        b.addEventListener('click', function (e) { e.stopPropagation(); try { t[1](); } catch (x) { console.error(x); } });
+        panel.appendChild(b);
+      });
+    });
+    var hint = document.createElement('div');
+    hint.className = 'hint';
+    hint.textContent = 'Com a ilha focada: ← → troca, OK abre as ações, Esc fecha.';
+    panel.appendChild(hint);
+    document.body.appendChild(panel);
+    btn.addEventListener('click', function (e) { e.stopPropagation(); panel.classList.toggle('open'); btn.classList.toggle('open'); });
+  }
+
   window.addEventListener('load', function () {
     remote();
+    testMenu();
     hubLife();
   });
 })();

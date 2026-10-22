@@ -566,6 +566,10 @@ var More = (function () {
   function checkIdle() {
     if (offTimer || document.hidden || H.playing() || !Plus.hubUrl('/')) return;
     if (Date.now() - H.idleAt() < IDLE_OFF) return;
+    checkIdleNow();
+  }
+
+  function checkIdleNow() {
     offLeft = 60;
     var box = $('stillthere');
     setClass(box, 'on', true);
@@ -642,6 +646,6 @@ var More = (function () {
       if (welcomeOn()) { hideWelcome(); return true; }
       return false;
     },
-    test: {goal: goal, onGame: onGame, welcome: function () { store('welcomed', ''); welcome(0); }, night: function () { store('night', ''); nightSummary(); }}
+    test: {goal: goal, onGame: onGame, stillThere: function () { offTimer = 0; checkIdleNow(); }, weather: weather, welcome: function () { store('welcomed', ''); welcome(0); }, night: function () { store('night', ''); nightSummary(); }}
   };
 })();

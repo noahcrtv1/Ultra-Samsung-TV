@@ -323,6 +323,8 @@ var Plus = (function () {
     onChange: function (fn) { listeners.push(fn); },
     onHub: function (fn) { hubListeners.push(fn); },
     onReminder: function (fn) { onReminder = fn; },
+    showReminder: function (r) { onReminder(r); },
+    playCast: function (c) { onCast(c); },
     onCast: function (fn) { onCast = fn; },
     verse: verse,
     inList: inList,
