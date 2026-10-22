@@ -200,10 +200,13 @@ var More = (function () {
     // Text longer than the pill: it grows to fit (up to most of the screen), centered. Measured again once the
     // text's own size transition (compact ↔ big) has finished.
     function size() {
-      var need = 0;
+      // Fitted to what it shows: the lead (art or icon), the text, and whatever sits on the right (equalizer, minute).
+      var need = 0, rightEl = box.querySelector('.right'), eqEl = box.querySelector('.eq'), dotsEl = box.querySelector('.dots');
       [].forEach.call(t.children, function (c) { need = Math.max(need, c.scrollWidth); });
-      var room = (big ? 132 + 120 : 56 + 64) + (a.right && a.right !== 'eq' ? String(a.right).length * 11 : 0);
-      var w = Math.min(1300, Math.max(big ? 640 : 300, need + room + 16));
+      var left = big ? 132 : 56;
+      var gap = (rightEl ? rightEl.scrollWidth + (big ? 46 : 32) : eqEl ? (big ? 84 : 58) : big ? 40 : 22) + (dotsEl ? 46 : 0);
+      t.style.right = gap + 'px';
+      var w = Math.min(1300, Math.max(big ? 420 : 200, left + need + gap + 6));
       if (expanded && row) w = Math.max(w, Math.min(1300, row.scrollWidth + 60));
       box.style.width = w + 'px';
       box.style.marginLeft = -w / 2 + 'px';
