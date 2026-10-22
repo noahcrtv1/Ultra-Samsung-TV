@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b0b0f">
+<title>Ultra TV</title>
+<style>
+  :root { --bg: #0b0b0f; --card: #1a1a20; --line: #2a2a32; --text: #f5f5f7; --dim: #9a9aa3; --accent: #ff9f0a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 -apple-system, system-ui, sans-serif; padding: 16px 16px 40px; }
+  h1 { font-size: 22px; margin: 4px 0 14px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); margin: 26px 0 10px; }
+  .card { background: var(--card); border-radius: 18px; padding: 14px; }
+  .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 360px; margin: 0 auto; }
+  button { font: inherit; color: var(--text); background: #26262e; border: 0; border-radius: 14px; padding: 14px 10px; font-weight: 600; }
+  button:active { background: #3a3a44; transform: scale(.97); }
+  .ok { background: var(--text); color: #000; border-radius: 50%; aspect-ratio: 1; }
+  .row { display: flex; gap: 10px; margin-top: 10px; }
+  .row > * { flex: 1; }
+  input, textarea, select { width: 100%; font: inherit; color: var(--text); background: #26262e; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  textarea { min-height: 70px; resize: vertical; }
+  .go { background: var(--accent); color: #000; }
+  .note { color: var(--dim); font-size: 13px; margin-top: 8px; }
+  .now { display: flex; gap: 12px; align-items: center; }
+  .now img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: #222; }
+  #msg { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #fff; color: #000; padding: 10px 18px; border-radius: 20px; font-weight: 600; opacity: 0; transition: opacity .3s; }
+  #msg.on { opacity: 1; }
+</style>
+</head>
+<body>
+<h1>📺 Controle da TV</h1>
+
+<div class="card">
+  <div class="pad">
+    <button data-key="KEY_HOME">Início</button><button data-key="KEY_UP">▲</button><button data-key="KEY_RETURN">Voltar</button>
+    <button data-key="KEY_LEFT">◀</button><button class="ok" data-key="KEY_ENTER">OK</button><button data-key="KEY_RIGHT">▶</button>
+    <button data-key="KEY_VOLDOWN">Vol −</button><button data-key="KEY_DOWN">▼</button><button data-key="KEY_VOLUP">Vol +</button>
+    <button data-key="KEY_MUTE">Mudo</button><button data-key="KEY_PLAY">▶︎ ❚❚</button><button data-key="KEY_POWER">Desligar</button>
+  </div>
+  <div class="note">A primeira vez a TV pergunta se permite “Ultra Hub”: aceite com o controle.</div>
+</div>
+
+<h2>Digitar na TV</h2>
+<div class="card">
+  <input id="text" placeholder="Email, senha, busca… (campo selecionado na TV)" autocomplete="off" autocapitalize="off">
+  <div class="row"><button class="go" id="sendText">Enviar texto</button></div>
+</div>
+
+<h2>Lembrete na tela</h2>
+<div class="card">
+  <textarea id="rem" placeholder="Tira o bolo do forno 🍰"></textarea>
+  <div class="row"><input id="from" placeholder="De quem (opcional)"><button class="go" id="sendRem">Mostrar na TV</button></div>
+</div>
+
+<h2>Mandar pra TV</h2>
+<div class="card">
+  <input id="link" placeholder="Link do YouTube" inputmode="url">
+  <div class="row"><button class="go" id="sendLink">Tocar link</button></div>
+  <div class="row"><select id="file"></select><button id="sendFile">Tocar vídeo</button></div>
+  <div class="row"><button id="stopCast">Parar na TV</button></div>
+  <div class="note">Vídeos da pasta ~/Movies/TV do Mac aparecem na lista.</div>
+</div>
+
+<h2>Música agora</h2>
+<div class="card">
+  <div class="now"><img id="art" alt=""><div><b id="song">—</b><div class="note" id="artist"></div></div></div>
+  <div class="row"><button data-music="previous">⏮</button><button data-music="pause">❚❚</button><button data-music="play">▶︎</button><button data-music="next">⏭</button></div>
+</div>
+
+<div id="msg"></div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const post = (p, b) => fetch(p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+  function say(t) { $('msg').textContent = t; $('msg').classList.add('on'); clearTimeout(say.t); say.t = setTimeout(() => $('msg').classList.remove('on'), 1800); }
+
+  document.querySelectorAll('[data-key]').forEach((b) => b.onclick = () => { post('/api/key', { key: b.dataset.key }); navigator.vibrate && navigator.vibrate(10); });
+  document.querySelectorAll('[data-music]').forEach((b) => b.onclick = () => post('/api/music', { action: b.dataset.music }));
+  $('sendText').onclick = () => { if ($('text').value) { post('/api/text', { text: $('text').value }); $('text').value = ''; say('Enviado'); } };
+  $('sendRem').onclick = () => {
+    if (!$('rem').value.trim()) return;
+    localStorage.setItem('from', $('from').value);
+    post('/api/reminder', { text: $('rem').value, from: $('from').value }).then(() => { $('rem').value = ''; say('Na TV 👍'); });
+  };
+  $('from').value = localStorage.getItem('from') || '';
+  $('sendLink').onclick = () => post('/api/cast', { url: $('link').value }).then((r) => say(r.ok ? 'Tocando na TV' : 'Link não reconhecido'));
+  $('sendFile').onclick = () => $('file').value && post('/api/cast', { file: $('file').value }).then(() => say('Tocando na TV'));
+  $('stopCast').onclick = () => post('/api/cast', { stop: true }).then(() => say('Parado'));
+
+  fetch('/api/media').then((r) => r.json()).then((list) => {
+    $('file').innerHTML = list.length ? list.map((f) => `<option>${f.replace(/</g, '&lt;')}</option>`).join('') : '<option value="">(pasta vazia)</option>';
+  });
+  function poll() {
+    fetch('/api/tv/state').then((r) => r.json()).then((s) => {
+      const m = s.music || {};
+      $('song').textContent = m.title || (m.playing === false ? 'Nada tocando' : '—');
+      $('artist').textContent = m.artist || '';
+      $('art').src = m.art || '';
+    }).catch(() => {});
+  }
+  poll(); setInterval(poll, 5000);
+</script>
+</body>
+</html>

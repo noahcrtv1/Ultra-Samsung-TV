@@ -115,18 +115,28 @@ var Data = (function () {
     for (var i = 0; hr && i < hr.time.length && w.hours.length < 6; i++) {
       var at = localTime(hr.time[i], off);
       if (at <= now) continue;
-      w.hours.push({at: at, temp: hr.temperature_2m[i], code: hr.weather_code[i], day: !hr.is_day || hr.is_day[i] !== 0});
+      w.hours.push({at: at, temp: hr.temperature_2m[i], code: hr.weather_code[i], day: !hr.is_day || hr.is_day[i] !== 0,
+        rain: hr.precipitation ? hr.precipitation[i] : 0, gust: hr.wind_gusts_10m ? hr.wind_gusts_10m[i] : 0});
     }
+    // Severe weather in the next 3 hours: thunderstorm, heavy rain (≥ 8 mm/h) or strong gusts (≥ 60 km/h).
+    w.storm = null;
+    for (var k = 0; k < 3 && k < w.hours.length && !w.storm; k++) {
+      var x = w.hours[k];
+      if (x.code >= 95) w.storm = {at: x.at, kind: 'storm'};
+      else if (x.rain >= 8) w.storm = {at: x.at, kind: 'rain', mm: x.rain};
+      else if (x.gust >= 60) w.storm = {at: x.at, kind: 'wind', kmh: x.gust};
+    }
+    w.tomorrow = o.daily.temperature_2m_max.length > 1 ? {max: o.daily.temperature_2m_max[1], min: o.daily.temperature_2m_min[1]} : null;
     return w;
   }
 
   function refreshWeather() {
     var now = Date.now();
-    if (fetchingWeather || (now - weatherAt < 30 * 60000 && now >= weatherAt)) return;
+    if (fetchingWeather || (now - weatherAt < 15 * 60000 && now >= weatherAt)) return;
     fetchingWeather = true;
     var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + Place.lat + '&longitude=' + Place.lon
         + '&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset'
-        + '&hourly=temperature_2m,weather_code,is_day&timezone=auto&forecast_days=2';
+        + '&hourly=temperature_2m,weather_code,is_day,precipitation,wind_gusts_10m&timezone=auto&forecast_days=2';
     get(url, {}, function (err, body) {
       fetchingWeather = false;
       if (err) return;
@@ -215,19 +225,20 @@ var Data = (function () {
   /** Service name on TMDB (part of it, lowercase) → our key, how to find its app on the TV (id, name), its name. */
   var SERVICES = [
     ['netflix', 'netflix', /^netflix$/, /netflix/i, 'Netflix'],
-    ['prime video', 'prime', /^amazon$/, /prime video|amazon/i, 'Prime Video'],
+    ['prime video', 'prime', /^amazon$|primevideo$|AmazonIgnition/, /prime video|amazon (prime )?video/i, 'Prime Video'],
     ['disney', 'disney', /disney/, /disney/i, 'Disney+'],
     ['hulu', 'hulu', /^hulu/, /hulu/i, 'Hulu'],
     ['paramount', 'paramount', /paramount|cbs/, /paramount/i, 'Paramount+'],
     ['peacock', 'peacock', /peacock/, /peacock/i, 'Peacock'],
     ['globoplay', 'globoplay', /globoplay/, /globoplay/i, 'Globoplay'],
-    ['max', 'max', /hbo|wbd|\.max/, /^(hbo )?max$|hbo max/i, 'Max'],
+    ['max', 'max', /(^|\.)hbo|hbo(go|now|max)|wbd|beamctv|\.max/i, /^(hbo )?max$|hbo max/i, 'Max'],
     ['apple tv', 'appletv', /appletv|apple\.tv/, /apple tv/i, 'Apple TV'],
     ['hotstar', 'hotstar', /hotstar/, /hotstar/i, 'JioHotstar'],
     ['crunchyroll', 'crunchyroll', /crunchyroll/, /crunchyroll/i, 'Crunchyroll']
   ];
 
   var installed = [];   // the TV's apps, from TV.apps()
+  var providerCommon = '';   // discover's filter for the TV's streaming services, once the list was fetched
 
   /** The installed app for a service key, or null. */
   function appFor(key) {
@@ -250,6 +261,12 @@ var Data = (function () {
   }
 
   function tmdb(path, done) {
+    // The web demo answers from recorded responses (it carries no key); the recorder keeps what TMDB answered.
+    if (window.TMDB_DEMO) { window.TMDB_DEMO(path, done); return; }
+    if (window.TMDB_RECORD) {
+      var inner = done;
+      done = function (err, body) { if (!err) window.TMDB_RECORD(path, body); inner(err, body); };
+    }
     var bearer = KEY.indexOf('eyJ') === 0;   // read access token (v4) or API key (v3)
     var url = API + path + (bearer ? '' : (path.indexOf('?') >= 0 ? '&' : '?') + 'api_key=' + encodeURIComponent(KEY));
     get(url, bearer ? {Authorization: 'Bearer ' + KEY, Accept: 'application/json'} : {Accept: 'application/json'}, done);
@@ -279,7 +296,8 @@ var Data = (function () {
   }
 
   /** This hour's 3 picks: movies ("movie"), shows ("tv") or both (null). */
-  function now(kind) {
+  function now(kind, max) {
+    max = max || 3;
     var list = [];
     if (!KEY) return list;
     for (var i = 0; i < picks.length; i++) {
@@ -288,7 +306,7 @@ var Data = (function () {
     }
     if (!list.length) return list;
     var hour = Math.floor(Date.now() / 3600000), out = [], seen = {};
-    for (var j = 0; j < list.length && out.length < 3; j++) {
+    for (var j = 0; j < list.length && out.length < max; j++) {
       var q = list[(hour * 3 + j) % list.length], f = franchise(q.title);
       if (!seen[f]) { seen[f] = true; out.push(q); }
     }
@@ -346,6 +364,13 @@ var Data = (function () {
         parts.push(I18N.lang === 'ru' ? I18N.count(n, 'сезон', 'сезона', 'сезонов') : tr(n === 1 ? '1 temporada' : n + ' temporadas', n === 1 ? '1 season' : n + ' seasons', n === 1 ? '1 temporada' : n + ' temporadas'));
       }
       var wp = o['watch/providers'], here = wp && wp.results && wp.results[REGION], flat = here && here.flatrate;
+      // Every service it's on here, the TV's or not, and where to rent or buy it (Achar onde ver).
+      var names = function (l) { var out = []; for (var n = 0; l && n < l.length; n++) if (out.indexOf(l[n].provider_name) < 0) out.push(l[n].provider_name); return out; };
+      p.where = {flat: names(flat), rent: names(here && (here.rent || []).concat(here.buy || []))};
+      if (!p.genres || !p.genres.length) p.genres = (o.genres || []).map(function (g) { return g.id; });
+      p.released = o.release_date || o.first_air_date || p.released || '';
+      p.runtime = o.runtime || (o.episode_run_time && o.episode_run_time[0]) || 0;
+      p.poster = o.poster_path || p.poster || '';
       p.app = null;
       for (var i = 0; flat && i < flat.length && !p.app; i++) {
         var s = service(flat[i].provider_name);
@@ -386,7 +411,8 @@ var Data = (function () {
   function addPick(list, o, kind) {
     if (!o.backdrop_path) return;
     if (CONFIG.hideAnimation && animated(o)) return;
-    list.push({id: o.id, kind: kind, title: kind === 'movie' ? o.title : o.name, backdrop: o.backdrop_path, meta: '', app: null, detailed: false});
+    list.push({id: o.id, kind: kind, title: kind === 'movie' ? o.title : o.name, backdrop: o.backdrop_path, meta: '', app: null, detailed: false,
+      genres: o.genre_ids || [], released: o.release_date || o.first_air_date || '', poster: o.poster_path || ''});
   }
 
   function keyOf(p) { return p.kind + ':' + p.id; }
@@ -407,6 +433,25 @@ var Data = (function () {
     })();
   }
 
+  /** Discover's filter for the TV's services, fetched once when the picks' list came from the cache. */
+  function ensureFilter(done) {
+    var have = providerCommon || stored('providerCommon');
+    if (have) { done(have); return; }
+    tmdb('/watch/providers/movie?language=' + lang() + '&watch_region=' + REGION, function (err, res) {
+      var ids = [];
+      for (var i = 0; !err && res.results && i < res.results.length; i++) {
+        var s = service(res.results[i].provider_name);
+        if (s && appFor(s[1])) ids.push(res.results[i].provider_id);
+      }
+      if (!ids.length) { done(''); return; }
+      providerCommon = '&language=' + lang() + '&watch_region=' + REGION + '&with_watch_monetization_types=flatrate&include_adult=false'
+          + '&sort_by=popularity.desc&with_watch_providers=' + encodeURIComponent(ids.join('|'))
+          + (CONFIG.hideAnimation ? '&without_genres=' + ANIMATION : '');
+      store('providerCommon', providerCommon);
+      done(providerCommon);
+    });
+  }
+
   function fetchList(done) {
     tmdb('/watch/providers/movie?language=' + lang() + '&watch_region=' + REGION, function (err, res) {
       if (err) { done(err); return; }
@@ -419,6 +464,8 @@ var Data = (function () {
       var common = '&language=' + lang() + '&watch_region=' + REGION + '&with_watch_monetization_types=flatrate&include_adult=false'
           + '&sort_by=popularity.desc&with_watch_providers=' + encodeURIComponent(ids.join('|'))
           + (CONFIG.hideAnimation ? '&without_genres=' + ANIMATION : '');
+      providerCommon = common;
+      store('providerCommon', common);
       var hot = {movie: [], tv: []}, fresh = {movie: [], tv: []};
       each(['movie', 'tv'], function (kind, next) {
         tmdb('/trending/' + kind + '/week?language=' + lang(), function (e, r) {
@@ -515,8 +562,21 @@ var Data = (function () {
     activeCoins: activeCoins,
     hasKey: function () { return !!KEY; },
     recsError: function () { return recsError; },
-    picks: now,
+    picks: function (kind) { return now(kind, 12); },
     showcase: all,
+    weatherNow: function () { return weather; },
+    /** "2026-12-18" → "18 de dez." */
+    date: function (iso) {
+      var m = /^(\d+)-(\d+)-(\d+)/.exec(iso || '');
+      if (!m) return iso || '';
+      try { return new Date(+m[1], m[2] - 1, +m[3]).toLocaleDateString(I18N.locale(), {day: 'numeric', month: 'short', year: 'numeric'}); } catch (e) { return iso; }
+    },
+    tmdb: tmdb,
+    details: details,
+    newPick: function (o, kind) { var l = []; addPick(l, o, kind); return l[0] || null; },
+    providerFilter: function () { return providerCommon || stored('providerCommon') || ''; },
+    ensureFilter: ensureFilter,
+    day: day,
     image: function (path, size) { return path ? 'https://image.tmdb.org/t/p/' + (size || 'w1280') + path : ''; },
 
     /** Night at the location: from sunset to sunrise (the last forecast; without one, 6:00 and 18:00). */

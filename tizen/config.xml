@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="https://freemytv.io/tizen" version="1.1.0" viewmodes="maximized">
-    <tizen:application id="FreeMyTVio.FreeMyTV" package="FreeMyTVio" required_version="3.0"/>
-    <name>Free My TV</name>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="https://freemytv.io/tizen-classico" version="1.1.0" viewmodes="maximized">
+    <tizen:application id="FMTVClassc.Classico" package="FMTVClassc" required_version="3.0"/>
+    <name>Ultra Samsung TV</name>
     <author href="https://freemytv.io">Free My TV</author>
     <description>A fast, ad-free home screen.</description>
     <content src="index.html"/>
@@ -13,6 +13,8 @@
     <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
     <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
     <tizen:privilege name="http://tizen.org/privilege/tv.window"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/voicecontrol"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/microphone"/>
     <tizen:profile name="tv-samsung"/>
     <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"/>
 </widget>

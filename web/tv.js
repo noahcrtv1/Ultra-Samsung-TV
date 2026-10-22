@@ -90,7 +90,7 @@ var TV = (function () {
   // Netflix, which live there too), services, keyboards and ad players. The rest is what Smart Hub shows.
   // Tizen 4 also lists Samsung's own pieces: the YouTube engine's hosts (cobalt-*: "App", "Youtube", "YoutubeTV"),
   // Bixby, search, previews, the weather and notification popups, Apple TV's stand-in and engine.
-  var SAMSUNG_HIDDEN = new RegExp('^(org\\.volt\\.|org\\.tizen\\.(?!browser$|netflix)|org\\.tizen\\.netflixlowmem$|ise-|ug-|d75857a5-)' +
+  var SAMSUNG_HIDDEN = new RegExp('^(org\\.volt\\.|org\\.tizen\\.(?!browser$|netflix|primevideo$|globoplayaria$)|org\\.tizen\\.netflixlowmem$|ise-|ug-|d75857a5-)' +
       '|[Ss]ervice$|[Dd]aemon|Preview$|syspopup|[Hh]elper$|AdPlayer|AdSuite|[Kk]eyboard|\\.OTApp$' +
       '|^com\\.samsung\\.(calendar-account-manager|tv\\.(cobalt-|aria-(dummy|engine)|airplay-app|ambient-support|' +
       'built-in-app-info-viewer|commonsearch|searchall|preview-|tv-scheduler|csfs|notification-app|mycontents|' +
@@ -196,11 +196,36 @@ var TV = (function () {
   }
 
   function samsungLaunch(id, done) {
-    try {
-      window.tizen.application.launch(id, function () { if (done) done(true); }, function () { if (done) done(false); });
-    } catch (e) {
-      if (done) done(false);
+    function plain() {
+      try {
+        window.tizen.application.launch(id, function () { if (done) done(true); }, function () { if (done) done(false); });
+      } catch (e) {
+        if (done) done(false);
+      }
     }
+    // Older TVs (Tizen 3/4) keep apps like YouTube and Netflix preloaded in the background, and a plain launch
+    // "succeeds" without bringing them up; Samsung's eden_resume request is what their own launcher sends.
+    function resume() {
+      try {
+        var control = new window.tizen.ApplicationControl('http://samsung.com/appcontrol/operation/eden_resume', null, null, null, []);
+        window.tizen.application.launchAppControl(control, id, function () { if (done) done(true); }, plain);
+      } catch (e) {
+        plain();
+      }
+    }
+    // Netflix on those TVs answers neither: only the TV's own Smart View API (the one phones use) brings it up.
+    if (/netflix/i.test(id)) {
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', 'http://127.0.0.1:8001/api/v2/applications/11101200001');
+        xhr.timeout = 3000;
+        xhr.onload = function () { if (xhr.status >= 200 && xhr.status < 300) { if (done) done(true); } else resume(); };
+        xhr.onerror = xhr.ontimeout = resume;
+        xhr.send();
+        return;
+      } catch (e) {}
+    }
+    resume();
   }
 
   /** The video sources the TV reports ([{type: 'TV' | 'HDMI' | ..., number}]), or null when it doesn't tell. */

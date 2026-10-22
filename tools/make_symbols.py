@@ -18,6 +18,8 @@ MAP = {
     "check": ("check", 0), "play": ("play_arrow", 1), "tv_settings": ("display_settings", 1),
     "chevron_down": ("keyboard_arrow_down", 0), "sunrise": ("wb_twilight", 1), "sunset": ("wb_twilight", 1),
     "live_tv": ("live_tv", 1), "bitcoin": ("currency_bitcoin", 0),
+    "memory": ("memory", 1), "shuffle": ("shuffle", 0), "popcorn": ("theaters", 1), "movie": ("movie", 1),
+    "bookmark": ("bookmark", 1), "wifi": ("wifi", 0), "computer": ("computer", 1), "slideshow": ("slideshow", 1), "search": ("search", 0), "sports_soccer": ("sports_soccer", 1),
 }
 
 

@@ -64,9 +64,9 @@
   var SHELF = [
     ['netflix', /^netflix$/, /netflix/i, ['#0A0A0A', '#000000']],
     ['youtube', /youtube/, /^youtube$/i, ['#1C1C1E', '#09090A']],
-    ['prime', /^amazon$/, /prime video|amazon/i, ['#2AA8FF', '#0A68D4']],
+    ['prime', /^amazon$|primevideo$|AmazonIgnition/, /prime video|amazon (prime )?video/i, ['#2AA8FF', '#0A68D4']],
     ['disney', /disney/, /disney/i, ['#173584', '#08143F']],
-    ['max', /hbo|wbd/, /^(hbo )?max$|hbo max/i, ['#5C30E8', '#221684']],
+    ['max', /(^|\.)hbo|hbo(go|now|max)|wbd|beamctv/i, /^(hbo )?max$|hbo max/i, ['#5C30E8', '#221684']],
     ['appletv', /appletv|apple\.tv/, /apple tv/i, ['#1C1C1E', '#000000']],
     ['hulu', /^hulu/, /hulu/i, ['#1CE783', '#0B8F4E']],
     ['paramount', /paramount|cbs/, /paramount/i, ['#0064FF', '#002A86']],
@@ -95,6 +95,11 @@
   }
 
   /** An app's face: its own icon on its brand color (or its name, when the icon can't be read). */
+  // 16:9 art for the shelf apps (their own icon, its background carried out to the edges), so every tile matches
+  // whatever icon the TV hands out: on Samsung some are wordmarks, some small square icons, some missing.
+  var TILE_ART = {netflix: 1, youtube: 1, prime: 1, disney: 1, max: 1, appletv: 1, hulu: 1, paramount: 1, peacock: 1,
+    globoplay: 1, spotify: 1};
+
   function face(app, box, wordSize) {
     var k = shelfKey(app);
     var top = k ? k[3][0] : app.color ? darken(app.color, 0.92) : '#2A2A2E';
@@ -103,6 +108,18 @@
     box.style.background = 'linear-gradient(' + top + ', ' + bottom + ')';
     var word = el('div', 'word', box, app.title);
     if (wordSize) word.style.fontSize = wordSize + 'px';
+    if (k && TILE_ART[k[0]]) {
+      var art = new Image(), url = 'icons/tile-' + k[0] + '.png';
+      word.style.visibility = 'hidden';
+      art.onload = function () {
+        box.style.backgroundImage = 'url("' + url + '")';
+        box.style.backgroundSize = 'cover';
+        box.style.backgroundPosition = 'center';
+      };
+      art.onerror = function () { word.style.visibility = ''; };
+      art.src = url;
+      return;
+    }
     if (app.icon) {
       var img = el('img', '', box);
       word.style.visibility = 'hidden';
@@ -133,11 +150,14 @@
 
   // MARK: - Focus
 
-  var Z = {TOP: 'top', CARDS: 'cards', SHELF: 'shelf', DRAWER: 'drawer', APPS: 'apps', SETTINGS: 'settings', EDIT: 'edit'};
-  var st = {zone: Z.SHELF, top: 0, tab: 0, card: 0, shelf: 0, drawer: 0, grid: 0, row: 0, edit: 0};
+  var Z = {TOP: 'top', CARDS: 'cards', SHELF: 'shelf', DRAWER: 'drawer', APPS: 'apps', SETTINGS: 'settings', EDIT: 'edit',
+    DETAIL: 'detail', PANEL: 'panel', SEARCH: 'search'};
+  var NT = 5;   // tabs: Explore, Movies, Shows, What's New, My List
+  var st = {zone: Z.SHELF, top: 0, tab: 0, card: 0, shelf: 0, drawer: 0, grid: 0, row: 0, edit: 0, action: 0, sRow: 0, sCol: 0};
+  var buttonDefs = [];
   var cards = [];
 
-  function sheetOpen() { return st.zone === Z.APPS || st.zone === Z.SETTINGS || st.zone === Z.EDIT; }
+  function sheetOpen() { return st.zone === Z.APPS || st.zone === Z.SETTINGS || st.zone === Z.EDIT || st.zone === Z.DETAIL || st.zone === Z.PANEL || st.zone === Z.SEARCH; }
 
   function updateFocus() {
     var i, list;
@@ -147,8 +167,9 @@
       setClass(list[i], 'focus', st.zone === Z.TOP && st.top === i);
     }
     list = $('buttons').children;
-    for (i = 0; i < list.length; i++) setClass(list[i], 'focus', st.zone === Z.TOP && st.top === 3 + i);
-    setClass($('quotes'), 'hide', st.zone === Z.TOP && st.top >= 3);
+    for (i = 0; i < list.length; i++) setClass(list[i], 'focus', st.zone === Z.TOP && st.top === NT + i);
+    setClass($('quotes'), 'hide', st.zone === Z.TOP && st.top >= NT);
+    setClass(body, 'top-buttons', st.zone === Z.TOP && st.top >= NT);
     list = $('cards').children;
     for (i = 0; i < list.length; i++) setClass(list[i], 'focus', st.zone === Z.CARDS && st.card === i);
     list = $('tiles').children;
@@ -161,6 +182,8 @@
     $('apps').lastChild.style.webkitTransform = $('apps').lastChild.style.transform = 'translateY(' + (-first * 239) + 'px)';
     focusRows($('settings'), st.row, st.zone === Z.SETTINGS);
     focusRows($('shelfedit'), st.edit, st.zone === Z.EDIT);
+    focusDetail();
+    cardFocused();
     setClass(body, 'drawer-open', st.zone === Z.DRAWER);
   }
 
@@ -192,26 +215,55 @@
 
   var TAB_KIND = [null, 'movie', 'tv'];
 
+  /** "Boa noite, Ana" (with name= in config.properties), or "Para você" without a name. */
+  function greeting() {
+    var name = (CONFIG.name || '').trim();
+    if (!name) return tr('Para você', 'For You', 'Para ti');
+    var h = new Date().getHours();
+    var g = h >= 5 && h < 12 ? tr('Bom dia', 'Good morning', 'Buenos días') : h >= 12 && h < 18 ? tr('Boa tarde', 'Good afternoon', 'Buenas tardes')
+      : tr('Boa noite', 'Good evening', 'Buenas noches');
+    return g + ', ' + name;
+  }
+
+  // The verse sits right after the title, whatever its length.
+  function setTitle() {
+    var t = $('title'), v = $('verse');
+    t.textContent = greeting();
+    var left = 76 + t.offsetWidth + 56;
+    v.style.left = left + 'px';
+    v.style.width = Math.max(200, 1310 - left) + 'px';
+  }
+
   function renderTop() {
-    $('title').textContent = tr('Para você', 'For You', 'Para ti');
+    setTitle();
     var tabs = $('tabs');
     tabs.innerHTML = '';
-    var names = [tr('Explorar', 'Explore', 'Explorar'), tr('Filmes', 'Movies', 'Películas'), tr('Séries', 'Shows', 'Series')];
-    for (var i = 0; i < 3; i++) {
+    var names = [tr('Explorar', 'Explore', 'Explorar'), tr('Filmes', 'Movies', 'Películas'), tr('Séries', 'Shows', 'Series'),
+      tr('Novidades', "What's New", 'Novedades'), tr('Minha lista', 'My List', 'Mi lista')];
+    for (var i = 0; i < NT; i++) {
       var t = el('button', 'tab', tabs, names[i]);
       hover(t, Z.TOP, i);
     }
     var buttons = $('buttons');
     buttons.innerHTML = '';
-    var defs = [['live_tv', tr('TV aberta', 'Live TV', 'TV en vivo')], ['hdmi', tr('Entradas HDMI', 'HDMI Inputs', 'Entradas HDMI')],
-      ['settings', tr('Ajustes', 'Settings', 'Ajustes')]];
-    for (var b = 0; b < 3; b++) {
-      var r = el('button', 'round' + (b === 2 ? ' last' : ''), buttons);
-      r.style.left = (1596 + 88 * b) + 'px';
-      sym(defs[b][0], r);
-      el('div', 'tip', r, defs[b][1]);
-      hover(r, Z.TOP, 3 + b);
+    buttonDefs = [['memory', tr('Liberar memória', 'Free memory', 'Liberar memoria'), freeMemory],
+      ['shuffle', tr('O que ver hoje?', 'What to watch?', '¿Qué ver hoy?'), function () { if (window.Fun) Fun.whatToWatch(); else shuffle(); }]];
+    buttonDefs.push(['popcorn', tr('Modo pipoca', 'Movie night', 'Modo palomitas'), popcorn]);
+    buttonDefs.push(['live_tv', tr('TV aberta', 'Live TV', 'TV en vivo'), function () { var live = liveTV(); if (live) launcher(live.id, tr('TV aberta', 'Live TV', 'TV en vivo'))(); }]);
+    buttonDefs.push(['hdmi', tr('Entradas HDMI', 'HDMI Inputs', 'Entradas HDMI'), function () { st.zone = Z.SHELF; openDrawer(); st.drawer = 1 < drawerInputs ? 1 : 0; updateFocus(); }]);
+    buttonDefs.push(['settings', tr('Ajustes', 'Settings', 'Ajustes'), openSettings]);
+    var nb = buttonDefs.length;
+    for (var b = 0; b < nb; b++) {
+      var r = el('button', 'round' + (b === nb - 1 ? ' last' : ''), buttons);
+      r.style.left = (1772 - 88 * (nb - 1 - b)) + 'px';
+      sym(buttonDefs[b][0], r);
+      el('div', 'tip', r, buttonDefs[b][1]);
+      hover(r, Z.TOP, NT + b);
     }
+    var v = Plus.verse();
+    $('verse').innerHTML = '';
+    el('span', 'text', $('verse'), '“' + v.text + '”');
+    el('span', 'ref', $('verse'), v.ref);
   }
 
   function renderQuotes() {
@@ -226,30 +278,49 @@
 
   // MARK: - Picks and background
 
-  function renderCards() {
+  function tabPicks() {
+    if (st.tab === 3) return Plus.news();
+    if (st.tab === 4) return [{search: true, id: 'search', kind: 'search', title: tr('Pesquisar', 'Search', 'Buscar'),
+      meta: tr('Ache um filme ou série para guardar', 'Find a movie or show to keep', 'Busca una película o serie')}].concat(Plus.myList());
     var list = Data.picks(TAB_KIND[st.tab]);
+    var live = st.tab === 0 && liveCard();
+    if (live) list = [live].concat(list);
+    return list;
+  }
+
+  function renderCards() {
+    var list = tabPicks();
     var holder = $('cards');
-    setClass(body, 'no-picks', !list.length);
+    setClass(body, 'no-picks', !list.length && st.tab < 3);
+    $('empty').textContent = list.length || st.tab < 3 ? '' : st.tab === 3
+      ? tr('Buscando as novidades da semana…', "Looking for this week's releases…", 'Buscando las novedades…')
+      : tr('Abra um título e escolha “Minha lista” para guardar aqui. Séries seguidas avisam episódio novo.',
+        'Open a title and choose “My List” to keep it here. Followed shows tell you about new episodes.',
+        'Abre un título y elige “Mi lista” para guardarlo aquí.');
     var same = list.length === cards.length;
     for (var i = 0; same && i < list.length; i++) same = list[i].id === cards[i].id && list[i].backdrop === cards[i].backdrop && list[i].meta === cards[i].meta;
     if (same && holder.children.length === list.length) return;
     cards = list;
     holder.innerHTML = '';
-    var rects = [[80, 1040], [1160, 320], [1520, 320]];
     for (var c = 0; c < list.length; c++) {
       var p = list[c], card = el('div', 'card', holder);
-      card.style.left = rects[c][0] + 'px';
-      card.style.width = rects[c][1] + 'px';
+
       var img = el('div', 'img', card);
-      img.style.backgroundImage = 'url(' + Data.image(p.backdrop, c === 0 ? 'w1280' : 'w780') + ')';
+      if (p.search) { setClass(card, 'search', true); sym('search', img, 96); }
+      else if (p.live) setClass(card, 'live', true);
+      else img.style.backgroundImage = 'url(' + Data.image(p.backdrop, c === 0 ? 'w1280' : 'w780') + ')';
       el('div', 'name', card, p.title);
-      if (c === 0 && p.meta) el('div', 'meta', card, p.meta);
+      if (p.meta) el('div', 'meta', card, p.meta);
+      if (Plus.inList(p) && Plus.inList(p).fresh) el('div', 'badge', card, tr('Novo episódio', 'New episode', 'Nuevo episodio'));
       hover(card, Z.CARDS, c);
     }
     st.card = Math.min(st.card, Math.max(0, list.length - 1));
+    scrollCards();
     if (!list.length && st.zone === Z.CARDS) st.zone = Z.SHELF;
-    backdrop(list.length ? Data.image(list[0].backdrop, 'w300') : '');
+    var first = list.filter(function (x) { return x.backdrop; })[0];
+    backdrop(first ? Data.image(first.backdrop, 'w300') : '');
     updateFocus();
+    placeLive();
   }
 
   var bgUrl = null, bgFront = 'bgA';
@@ -284,6 +355,485 @@
     } catch (e) {
       c.lastChild.textContent = d.toDateString();
     }
+  }
+
+  // MARK: - System stats: the TV's RAM and CPU load, from tizen.systeminfo (absent in the browser preview).
+
+  function renderStats() {
+    var info = window.tizen && tizen.systeminfo, box = $('stats');
+    if (!info || !info.getTotalMemory) return;
+    var gb = function (b) { return (b / 1073741824).toFixed(1); };
+    var total = info.getTotalMemory(), used = total - info.getAvailableMemory();
+    box.style.right = (80 + $('quotes').offsetWidth + ($('quotes').offsetWidth ? 40 : 0)) + 'px';
+    info.getPropertyValue('CPU', function (cpu) {
+      box.textContent = 'RAM ' + gb(used) + ' / ' + gb(total) + ' GB  ·  CPU ' + Math.round(cpu.load * 100) + '%';
+    }, function () {
+      box.textContent = 'RAM ' + gb(used) + ' / ' + gb(total) + ' GB';
+    });
+  }
+
+  // Closes every other app the TV keeps running, through the TV's own Smart View API (as phones close apps).
+  function freeMemory() {
+    var info = window.tizen && tizen.systeminfo, before = info && info.getAvailableMemory ? info.getAvailableMemory() : 0;
+    var ids = apps.map(function (a) { return a.id; }), left = ids.length;
+    if (/netflix/i.test(ids.join(' '))) { ids.push('11101200001'); left++; }
+    function done() {
+      if (--left > 0) return;
+      setTimeout(function () {
+        renderStats();
+        var freed = before && info.getAvailableMemory() - before;
+        toast(freed > 0 ? tr('Memória liberada: ', 'Memory freed: ', 'Memoria liberada: ') + Math.round(freed / 1048576) + ' MB'
+          : tr('Apps fechados', 'Apps closed', 'Apps cerradas'));
+      }, 1500);
+    }
+    if (!left) { toast(tr('Apps fechados', 'Apps closed', 'Apps cerradas')); return; }
+    ids.forEach(function (id) {
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('DELETE', 'http://127.0.0.1:8001/api/v2/applications/' + encodeURIComponent(id));
+        xhr.timeout = 3000;
+        xhr.onload = xhr.onerror = xhr.ontimeout = done;
+        xhr.send();
+      } catch (e) { done(); }
+    });
+  }
+
+  // MARK: - Theme from the poster, and the trailer inside the focused card
+
+  var trailerTimer = 0, trailerCard = -1, focusedKey = '';
+
+  function stopCardTrailer() {
+    clearTimeout(trailerTimer);
+    var old = document.querySelector('#cards iframe');
+    if (old) old.parentNode.removeChild(old);
+    trailerCard = -1;
+  }
+
+  /** YouTube's player, muted and without its controls (the remote can't reach them anyway). */
+  function youtube(key, sound) {
+    // YouTube refuses to play inside a page without an origin (file://, error 153): the player sits in a page served
+    // over http (the Mac hub's yt.html, or trailer_page), which passes YouTube its origin.
+    var page = Plus.trailerPage();
+    if (!page) return null;
+    var f = document.createElement('iframe');
+    f.className = 'yt';
+    f.setAttribute('allow', 'autoplay; encrypted-media');
+    f.setAttribute('frameborder', '0');
+    f.src = page + '?v=' + encodeURIComponent(key) + (sound ? '&sound=1' : '');
+    return f;
+  }
+
+  /**
+   * The focused card is the wide one (the first, when the focus is elsewhere), the rest are tall; the row scrolls so
+   * the wide card starts where the first one does.
+   */
+  function scrollCards() {
+    var nodes = $('cards').children, wide = st.zone === Z.CARDS ? st.card : 0, x = 80, wideX = 80;
+    for (var i = 0; i < nodes.length; i++) {
+      var w = i === wide ? 1040 : 320;
+      if (i === wide) wideX = x;
+      nodes[i].style.left = x + 'px';
+      nodes[i].style.width = w + 'px';
+      setClass(nodes[i], 'wide', i === wide);
+      x += w + 40;
+    }
+    var shift = Math.max(0, Math.min(wideX - 80, x - 40 + 80 - 1920));
+    var h = $('cards');
+    h.style.webkitTransform = h.style.transform = shift ? 'translateX(' + -shift + 'px)' : '';
+    if (wide || shift) hideLive(); else placeLive();
+  }
+
+  function cardFocused() {
+    scrollCards();
+    var p = st.zone === Z.CARDS ? cards[st.card] : null, k = p ? p.kind + ':' + p.id + ':' + st.card : '';
+    if (k === focusedKey) return;
+    focusedKey = k;
+    stopCardTrailer();
+    if (!p || p.live || p.search) return;
+    if (p.backdrop) backdrop(Data.image(p.backdrop, 'w300'));   // the background takes the focused poster's colors
+    if (window.More) More.mood(p);
+    var index = st.card;
+    trailerTimer = setTimeout(function () {
+      Plus.trailer(p, function (key) {
+        if (!key || st.zone !== Z.CARDS || st.card !== index || saverOn) return;
+        var img = $('cards').children[index] && $('cards').children[index].firstChild;
+        if (!img) return;
+        var f = youtube(key, false);
+        if (!f) return;
+        trailerCard = index;
+        img.appendChild(f);
+      });
+    }, 4000);
+  }
+
+  // MARK: - A title's page: trailer behind, synopsis, where it is, My List
+
+  var detailActions = [], detailPick = null;
+
+  function openDetail(p) {
+    stopCardTrailer();
+    hideLive();
+    detailPick = p;
+    if (window.More) More.mood(p);
+    var d = $('detail');
+    d.innerHTML = '';
+    var bg = el('div', 'bg', d);
+    if (p.backdrop) bg.style.backgroundImage = 'url(' + Data.image(p.backdrop, 'original') + ')';
+    var video = el('div', 'video', d);
+    el('div', 'shade', d);
+    var info = el('div', 'info', d);
+    el('div', 'name', info, p.title);
+    if (p.meta) el('div', 'meta', info, p.meta);
+    var about = el('div', 'about', info, '');
+    // Where it is: the services here (the TV's or not) and where to rent or buy.
+    var whereBox = el('div', 'where', info);
+    function showWhere() {
+      whereBox.innerHTML = '';
+      var w = p.where;
+      if (!w) return;
+      if (w.flat.length) el('div', '', whereBox, tr('Onde ver: ', 'Streaming on: ', 'Dónde ver: ') + w.flat.slice(0, 5).join(' · '));
+      if (w.rent.length) el('div', 'rent', whereBox, tr('Alugar ou comprar: ', 'Rent or buy: ', 'Alquilar o comprar: ') + w.rent.slice(0, 4).join(' · '));
+      if (!w.flat.length && !w.rent.length) el('div', 'rent', whereBox, tr('Ainda em nenhum streaming no Brasil', 'Not streaming here yet', 'Aún no está en streaming'));
+    }
+    if (p.where) showWhere();
+    else Data.details(p, function () { if (detailPick === p) { showWhere(); if (!future && p.released > Data.day(0)) addPremiere(); } });
+    var future = p.released && p.released > Data.day(0);
+    Plus.overview(p, function (text) {
+      if (detailPick !== p) return;
+      about.textContent = text.length > 330 ? text.slice(0, text.lastIndexOf(' ', 320)) + '…' : text;
+    });
+    var row = el('div', 'actions', info);
+    var app = Data.appFor(p.app);
+    detailActions = [];
+    if (app) detailActions.push({label: tr('Assistir no ', 'Watch on ', 'Ver en ') + (p.service || app.title), symbol: 'play',
+      run: function () { Plus.seen(p); launcher(app.id, app.title)(); }});
+    detailActions.push({label: tr('Trailer com som', 'Trailer with sound', 'Tráiler con sonido'), symbol: 'movie', run: function () {
+      Plus.trailer(p, function (key) {
+        var f = key && youtube(key, true);
+        if (!f) { toast(key ? tr('Trailers precisam do Ultra Hub aberto no Mac', 'Trailers need Ultra Hub on the Mac', 'Los tráileres necesitan Ultra Hub')
+          : tr('Sem trailer para este título', 'No trailer for this title', 'Sin tráiler')); return; }
+        video.innerHTML = '';
+        video.appendChild(f);
+        setClass(d, 'playing', true);
+      });
+    }});
+    var label = function () {
+      return Plus.inList(p) ? (p.kind === 'tv' ? tr('Seguindo', 'Following', 'Siguiendo') : tr('Na minha lista', 'In My List', 'En mi lista'))
+        : (p.kind === 'tv' ? tr('Seguir série', 'Follow show', 'Seguir serie') : tr('Minha lista', 'My List', 'Mi lista'));
+    };
+    var listAction = {label: label(), symbol: 'bookmark', run: function () {
+      var added = Plus.toggle(p);
+      listAction.node.lastChild.textContent = label();
+      toast(added ? (p.kind === 'tv' ? tr('Aviso quando sair episódio novo', "You'll hear about new episodes", 'Te aviso de episodios nuevos')
+        : tr('Guardado na Minha lista', 'Saved to My List', 'Guardado en Mi lista')) : tr('Tirado da lista', 'Removed from the list', 'Quitado de la lista'));
+    }};
+    detailActions.push(listAction);
+    function addPremiere() {
+      if (detailActions.some(function (x) { return x.premiere; })) return;
+      var lab = function () { return Plus.premiere(p) ? tr('Contando os dias', 'Counting down', 'Contando los días') : tr('Avisar estreia', 'Count down to it', 'Avisar estreno'); };
+      var act = {premiere: true, label: lab(), symbol: 'bell', run: function () {
+        var on = Plus.togglePremiere(p);
+        act.node.lastChild.textContent = lab();
+        toast(on ? tr('A ilha conta os dias até ', 'The island counts down to ', 'La isla cuenta los días hasta ') + Data.date(p.released) : tr('Contagem removida', 'Countdown removed', 'Cuenta quitada'));
+      }};
+      detailActions.push(act);
+      var b = el('button', 'act', row);
+      sym(act.symbol, b);
+      el('span', '', b, act.label);
+      act.node = b;
+      hover(b, Z.DETAIL, detailActions.length - 1);
+    }
+    var built = detailActions.length;
+    for (var i = 0; i < built; i++) {
+      var b = el('button', 'act', row);
+      sym(detailActions[i].symbol, b);
+      el('span', '', b, detailActions[i].label);
+      detailActions[i].node = b;
+      hover(b, Z.DETAIL, i);
+    }
+    if (future) addPremiere();
+    st.zone = Z.DETAIL;
+    st.action = 0;
+    setClass(d, 'open', true);
+    updateFocus();
+    // The trailer starts muted behind the page after a moment, as on Apple TV.
+    setTimeout(function () {
+      if (detailPick !== p || st.zone !== Z.DETAIL) return;
+      Plus.trailer(p, function (key) {
+        var f = key && detailPick === p && !video.firstChild && youtube(key, false);
+        if (f) { video.appendChild(f); setTimeout(function () { if (detailPick === p) setClass(d, 'teaser', true); }, 1500); }
+      });
+    }, 1800);
+  }
+
+  function closeDetail() {
+    detailPick = null;
+    var d = $('detail');
+    setClass(d, 'open', false);
+    setClass(d, 'playing', false);
+    setClass(d, 'teaser', false);
+    setTimeout(function () { if (!detailPick) d.innerHTML = ''; }, 400);
+  }
+
+  function focusDetail() {
+    for (var i = 0; i < detailActions.length; i++) if (detailActions[i].node) setClass(detailActions[i].node, 'focus', st.zone === Z.DETAIL && st.action === i);
+  }
+
+  function shuffle() {
+    toast(tr('Sorteando… 🎲', 'Picking… 🎲', 'Sorteando… 🎲'));
+    Plus.shuffle(function (p) {
+      if (!p) { toast(tr('Ainda sem títulos para sortear', 'Nothing to pick from yet', 'Aún no hay títulos')); return; }
+      setClass($('toast'), 'on', false);
+      openDetail(p);
+    });
+  }
+
+  // Movie night: other apps closed and the Alexa routine (lights down), when it's set up.
+  function popcorn() {
+    freeMemory();
+    if (Plus.popcorn()) toast(tr('Modo pipoca: Alexa avisada, apps fechados 🍿', 'Movie night: Alexa told, apps closed 🍿', 'Modo palomitas 🍿'));
+    else toast(tr('Apps fechados. Para a Alexa apagar a luz, ponha voice_monkey_url no config.', 'Apps closed. Set voice_monkey_url for Alexa.', 'Apps cerradas.'));
+  }
+
+  // MARK: - The HDMI on screen, live inside the first card (Samsung)
+
+  var liveOn = false;
+
+  function liveSource() {
+    if (!window.tizen || !tizen.tvwindow) return null;
+    var src = null, res = null;
+    try { src = tizen.tvwindow.getSource(); } catch (e) {}
+    try { res = tizen.tvwindow.getVideoResolution(); } catch (e) {}
+    if (!src || src.type !== 'HDMI' || src.signal === false || !res || !res.width) return null;
+    return src;
+  }
+
+  function liveCard() {
+    var src = liveSource();
+    if (!src) return null;
+    var name = src.name && !/^HDMI/i.test(src.name) ? src.name : 'HDMI ' + src.number;
+    return {live: true, id: 'live:' + src.number, kind: 'live', title: name + tr(' ao vivo', ' live', ' en vivo'),
+      meta: tr('OK abre em tela cheia', 'OK opens it full screen', 'OK lo abre en pantalla completa'), sourceId: 'source:HDMI:' + src.number};
+  }
+
+  function placeLive() {
+    var want = cards[0] && cards[0].live && !saverOn && !sheetOpen() && !document.hidden;
+    if (!want) { hideLive(); return; }
+    if (liveOn) return;
+    try {
+      tizen.tvwindow.show(function () { liveOn = true; }, function () { liveOn = false; },
+          ['207px', '262px', '786px', '442px'], 'MAIN');
+    } catch (e) {}
+  }
+
+  function hideLive() {
+    if (!liveOn) return;
+    liveOn = false;
+    try { tizen.tvwindow.hide(function () {}, function () {}); } catch (e) {}
+  }
+
+  // MARK: - Panels: guests' Wi-Fi, the Mac, a reminder
+
+  function openPanel(build) {
+    hideLive();
+    stopCardTrailer();
+    var box = $('panel').firstChild;
+    box.innerHTML = '';
+    build(box);
+    el('div', 'hint', box, tr('OK ou Voltar fecha', 'OK or Back closes', 'OK o Atrás cierra'));
+    st.zone = Z.PANEL;
+    setClass($('panel'), 'open', true);
+    updateFocus();
+  }
+
+  function wifiPanel() {
+    openPanel(function (box) {
+      el('div', 'title', box, tr('Wi-Fi para visitas', 'Guest Wi-Fi', 'Wi-Fi para visitas'));
+      var img = el('img', 'qr', box);
+      img.src = 'wifi-qr.png';
+      el('div', 'line', box, Plus.wifiSsid());
+      el('div', 'small', box, tr('Aponte a câmera do celular para o código', "Point the phone's camera at the code", 'Apunta la cámara del celular'));
+    });
+  }
+
+  function macPanel() {
+    openPanel(function (box) {
+      var h = Plus.hub();
+      el('div', 'title', box, 'Mac');
+      if (!h.online) { el('div', 'line', box, tr('O Mac não respondeu. O Ultra Hub está aberto?', "The Mac didn't answer. Is Ultra Hub open?", 'El Mac no respondió.')); return; }
+      var m = h.mac || {};
+      el('div', 'line', box, 'CPU ' + (m.cpu || 0) + '%  ·  RAM ' + (m.ramUsed || 0) + ' / ' + (m.ramTotal || 0) + ' GB');
+      (m.jobs || []).forEach(function (j) {
+        el('div', 'line', box, j.name + (j.progress >= 0 ? '  ' + j.progress + '%' : tr('  em andamento', '  running', '  en curso')));
+      });
+      if (!(m.jobs || []).length) el('div', 'small', box, tr('Nenhum render ou exportação agora', 'No render or export now', 'Ningún render ahora'));
+    });
+  }
+
+  Plus.onReminder(function (r) {
+    poke();
+    var b = $('reminder');
+    b.innerHTML = '';
+    el('div', 'from', b, (r.from ? r.from + ' · ' : '') + Data.time(r.at));
+    el('div', 'text', b, r.text);
+    setClass(b, 'on', true);
+    clearTimeout(b.timer);
+    b.timer = setTimeout(function () { setClass(b, 'on', false); }, 30000);
+  });
+
+  // MARK: - From the Mac: music playing, videos sent to the TV
+
+  Plus.onCast(function (c) {
+    var player = $('player');
+    player.innerHTML = '';
+    if (c.kind === 'stop') { closePlayer(); return; }
+    poke();
+    hideLive();
+    stopCardTrailer();
+    if (c.kind === 'youtube') {
+      var f = youtube(c.id, true);
+      if (f) player.appendChild(f);
+    } else if (c.kind === 'video') {
+      var v = el('video', '', player);
+      v.src = Plus.hubUrl(c.url);
+      v.autoplay = true;
+      v.controls = false;
+      v.onended = closePlayer;
+    }
+    setClass(player, 'on', true);
+  });
+
+  function playerOn() { return hasClass($('player'), 'on'); }
+
+  function closePlayer() {
+    var player = $('player');
+    setClass(player, 'on', false);
+    player.innerHTML = '';
+    placeLive();
+  }
+
+  // MARK: - Search: an on-screen keyboard for the remote (or the phone typing into the field), results from TMDB
+
+  var KEYS = [
+    ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'],
+    ['k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't'],
+    ['u', 'v', 'w', 'x', 'y', 'z', '1', '2', '3', '4'],
+    ['5', '6', '7', '8', '9', '0', '-', ':', '&', '?'],
+    ['␣', '⌫', tr('Limpar', 'Clear', 'Borrar'), tr('Teclado TV', 'TV keyboard', 'Teclado TV')]
+  ];
+  var query = '', results = [], searchTimer = 0;
+
+  function openSearch() {
+    stopCardTrailer();
+    hideLive();
+    var box = $('search');
+    box.innerHTML = '';
+    el('div', 'title', box, tr('Pesquisar', 'Search', 'Buscar'));
+    var field = el('input', 'field', box);
+    field.value = query;
+    field.setAttribute('placeholder', tr('Nome do filme ou série', 'Movie or show name', 'Película o serie'));
+    // Text typed from the phone (Ultra Hub) lands here when the field has focus.
+    field.oninput = function () { query = field.value; runSearch(); };
+    el('div', 'voice', box, tr('🎤 Segure o botão do microfone do controle e fale o nome', '🎤 Hold the remote\'s mic button and say the name',
+      '🎤 Mantén el botón del micrófono y di el nombre'));
+    var kb = el('div', 'kb', box);
+    for (var r = 0; r < KEYS.length; r++) {
+      var row = el('div', 'krow', kb);
+      for (var c = 0; c < KEYS[r].length; c++) {
+        var k = el('button', 'k' + (KEYS[r][c].length > 1 ? ' wide' : ''), row, KEYS[r][c]);
+        (function (r, c, k) {
+          k.onmouseover = function () { st.sRow = r; st.sCol = c; focusSearch(); };
+          k.onclick = function () { typeKey(KEYS[r][c]); };
+        })(r, c, k);
+      }
+    }
+    el('div', 'hits', box);
+    st.zone = Z.SEARCH;
+    st.sRow = 0;
+    st.sCol = 0;
+    setClass(box, 'open', true);
+    renderHits();
+    focusSearch();
+    listenVoice();
+  }
+
+  /** Samsung's voice interaction: what's said into the remote's mic comes as a search term. */
+  var voiceReady = false;
+  function listenVoice() {
+    var vi = window.webapis && webapis.voiceinteraction;
+    if (!vi || voiceReady) return;
+    try {
+      vi.setCallback({
+        onupdatestate: function () { return 'List'; },
+        onsearch: function (terms) {
+          var t = '';
+          try { t = webapis.voiceinteraction.getDataFromSearchTerm(terms, 'SEARCH_TERM_UTTERANCE') || ''; } catch (e) {}
+          if (!t && terms && terms.utterance) t = terms.utterance;
+          if (!t) return false;
+          if (st.zone !== Z.SEARCH) openSearch();
+          query = String(t).toLowerCase();
+          $('search').querySelector('.field').value = query;
+          runSearch();
+          return true;
+        }
+      });
+      vi.listen();
+      voiceReady = true;
+    } catch (e) {}
+  }
+
+  function typeKey(k) {
+    if (k === '⌫') query = query.slice(0, -1);
+    else if (k === '␣') query += ' ';
+    else if (k === tr('Teclado TV', 'TV keyboard', 'Teclado TV')) { $('search').querySelector('.field').focus(); return; }
+    else if (k.length > 1) query = '';
+    else query += k;
+    $('search').querySelector('.field').value = query;
+    runSearch();
+  }
+
+  function runSearch() {
+    clearTimeout(searchTimer);
+    var q = query.replace(/^\s+|\s+$/g, '');
+    if (q.length < 2) { results = []; renderHits(); return; }
+    searchTimer = setTimeout(function () {
+      Plus.search(q, function (list) {
+        if (q !== query.replace(/^\s+|\s+$/g, '')) return;
+        results = list;
+        renderHits();
+      });
+    }, 450);
+  }
+
+  function renderHits() {
+    var hits = $('search').querySelector('.hits');
+    if (!hits) return;
+    hits.innerHTML = '';
+    if (!results.length) {
+      el('div', 'none', hits, query.length < 2 ? tr('Digite pelo menos 2 letras', 'Type at least 2 letters', 'Escribe al menos 2 letras')
+        : tr('Nada encontrado (ainda)', 'Nothing found (yet)', 'Nada encontrado'));
+    }
+    for (var i = 0; i < results.length; i++) {
+      var h = el('div', 'hit', hits);
+      var im = el('div', 'img', h);
+      im.style.backgroundImage = 'url(' + Data.image(results[i].backdrop, 'w300') + ')';
+      el('div', 'name', h, results[i].title);
+      el('div', 'kind', h, results[i].kind === 'tv' ? tr('Série', 'Show', 'Serie') : tr('Filme', 'Movie', 'Película'));
+      (function (i, h) {
+        h.onmouseover = function () { st.sRow = -1; st.sCol = i; focusSearch(); };
+        h.onclick = function () { setClass($('search'), 'open', false); openDetail(results[i]); };
+      })(i, h);
+    }
+    if (st.sRow < 0 && st.sCol >= results.length) { st.sRow = 0; st.sCol = 0; }
+    focusSearch();
+  }
+
+  function focusSearch() {
+    var box = $('search'), rows = box.querySelectorAll('.krow'), hits = box.querySelectorAll('.hit');
+    for (var r = 0; r < rows.length; r++) {
+      for (var c = 0; c < rows[r].children.length; c++) setClass(rows[r].children[c], 'focus', st.zone === Z.SEARCH && st.sRow === r && st.sCol === c);
+    }
+    for (var i = 0; i < hits.length; i++) setClass(hits[i], 'focus', st.zone === Z.SEARCH && st.sRow < 0 && st.sCol === i);
   }
 
   // MARK: - Shelf
@@ -328,6 +878,11 @@
     }
     drawerInputs = drawerItems.length;
     drawerItems.push({label: tr('Todos os Apps', 'All Apps', 'Todas las apps'), symbol: 'apps', run: openApps});
+    if (Plus.hasWifi()) drawerItems.push({label: tr('Wi-Fi visita', 'Guest Wi-Fi', 'Wi-Fi visita'), symbol: 'wifi', run: wifiPanel});
+    if (Plus.hubUrl('/')) drawerItems.push({label: 'Mac', symbol: 'computer', run: macPanel});
+    drawerItems.push({label: tr('Vitrine', 'Showcase', 'Vitrina'), symbol: 'slideshow', run: function () { closeDrawer(); showSaver(); }});
+    drawerItems.push({label: tr('Diversão', 'Fun', 'Diversión'), symbol: 'sparkles', run: function () { closeDrawer(); if (window.Fun) Fun.relax(); }});
+    if (window.More && More.team) drawerItems.push({label: More.teamName, symbol: 'sports_soccer', run: More.team});
     drawerItems.push({label: tr('Ajustes do Início', 'Home Settings', 'Ajustes de inicio'), symbol: 'settings', run: openSettings});
     drawerItems.push({label: tr('Ajustes da TV', 'TV Settings', 'Ajustes del TV'), symbol: 'tv_settings', run: tvSettings});
     var n = drawerItems.length, gap = 18, groupGap = 56, groups = drawerInputs > 0 && drawerInputs < n ? 2 : 1;
@@ -458,11 +1013,16 @@
   }
 
   function closeSheets() {
+    var from = st.zone;
+    if (from === Z.DETAIL) closeDetail();
+    setClass($('search'), 'open', false);
+    setClass($('panel'), 'open', false);
     setClass($('apps'), 'open', false);
     setClass($('settings'), 'open', false);
     setClass($('shelfedit'), 'open', false);
-    st.zone = Z.SHELF;
+    st.zone = (from === Z.DETAIL || from === Z.SEARCH) && cards.length ? Z.CARDS : Z.SHELF;
     updateFocus();
+    placeLive();
   }
 
   // MARK: - Home Settings
@@ -489,6 +1049,11 @@
         rows.push({label: names[i], toggle: Prefs.quotes() && Prefs.coin(i), dim: !Prefs.quotes(),
           step: function () { if (Prefs.quotes()) { Prefs.setCoin(i, !Prefs.coin(i)); Data.settingsChanged(); } }});
       })(i);
+    }
+    if (window.More) {
+      var im = More.islandMode();
+      rows.push({label: 'Dynamic Island', value: im === 'off' ? off : im === 'important' ? tr('Só importantes', 'Important only', 'Solo importantes') : on,
+        step: function (d) { var v = ['on', 'important', 'off'], i = v.indexOf(More.islandMode()); More.setIslandMode(v[(i + (d || 1) + 3) % 3]); }});
     }
     rows.push({label: tr('Prateleira', 'Shelf', 'Estante'), value: '›', step: function (d) { if (d >= 0) openShelfEdit(); }});
     rows.push({label: tr('Ajustes da TV', 'TV Settings', 'Ajustes del TV'), value: '›', step: function (d) { if (d >= 0) tvSettings(); }});
@@ -624,14 +1189,24 @@
   function activate() {
     switch (st.zone) {
       case Z.TOP:
-        if (st.top < 3) return;
-        if (st.top === 3) { var live = liveTV(); if (live) launcher(live.id, tr('TV aberta', 'Live TV', 'TV en vivo'))(); }
-        else if (st.top === 4) { st.zone = Z.SHELF; openDrawer(); st.drawer = 1 < drawerInputs ? 1 : 0; updateFocus(); }
-        else openSettings();
+        if (st.top < NT) return;
+        if (buttonDefs[st.top - NT]) buttonDefs[st.top - NT][2]();
         return;
       case Z.CARDS:
-        var p = cards[st.card], app = p && Data.appFor(p.app);
-        if (app) launcher(app.id, app.title)();
+        var p = cards[st.card];
+        if (p && p.live) { hideLive(); var src = liveTV(); TV.launch(p.sourceId || (src && src.id), null, function () {}); return; }
+        if (p && p.search) { openSearch(); return; }
+        if (p) openDetail(p);
+        return;
+      case Z.SEARCH:
+        if (st.sRow < 0) { if (results[st.sCol]) { var hit = results[st.sCol]; setClass($('search'), 'open', false); openDetail(hit); } return; }
+        typeKey(KEYS[st.sRow][st.sCol]);
+        return;
+      case Z.DETAIL:
+        if (detailActions[st.action]) detailActions[st.action].run();
+        return;
+      case Z.PANEL:
+        closeSheets();
         return;
       case Z.SHELF:
         if (shelf[st.shelf]) launcher(shelf[st.shelf].id, shelf[st.shelf].title)();
@@ -675,10 +1250,12 @@
         break;
       case Z.TOP:
         if (dx) {
-          st.top = Math.max(0, Math.min(5, st.top + dx));
-          if (st.top < 3) selectTab(st.top);   // as on Apple TV: focusing a tab selects it
+          st.top = Math.max(0, Math.min(NT + buttonDefs.length - 1, st.top + dx));
+          if (st.top < NT) selectTab(st.top);   // as on Apple TV: focusing a tab selects it
+        } else if (dy < 0) {
+          if (window.More && More.focusIsland()) { st.zone = 'island'; }
         } else if (dy > 0) {
-          if (cards.length) { st.zone = Z.CARDS; st.card = Math.min(cards.length - 1, st.top < 3 ? 0 : cards.length - 1); }
+          if (cards.length) { st.zone = Z.CARDS; st.card = Math.min(cards.length - 1, st.top < NT ? 0 : cards.length - 1); }
           else st.zone = Z.SHELF;
         }
         break;
@@ -701,12 +1278,27 @@
         if (dy) st.edit = Math.max(0, Math.min(apps.length - 1, st.edit + dy));
         else if (dx) editShelf(dx);
         break;
+      case Z.DETAIL:
+        if (dx) st.action = Math.max(0, Math.min(detailActions.length - 1, st.action + dx));
+        break;
+      case Z.SEARCH:
+        if (st.sRow < 0) {
+          if (dx) st.sCol = Math.max(0, Math.min(results.length - 1, st.sCol + dx));
+          else if (dy < 0) { st.sRow = KEYS.length - 1; st.sCol = Math.min(st.sCol, KEYS[st.sRow].length - 1); }
+        } else if (dx) st.sCol = Math.max(0, Math.min(KEYS[st.sRow].length - 1, st.sCol + dx));
+        else if (dy < 0 && st.sRow > 0) { st.sRow--; st.sCol = Math.min(st.sCol, KEYS[st.sRow].length - 1); }
+        else if (dy > 0 && st.sRow < KEYS.length - 1) { st.sRow++; st.sCol = Math.min(st.sCol, KEYS[st.sRow].length - 1); }
+        else if (dy > 0 && results.length) { st.sRow = -1; st.sCol = 0; }
+        focusSearch();
+        return;
     }
     updateFocus();
   }
 
   function back() {
+    if (playerOn()) { closePlayer(); return; }
     if (st.zone === Z.EDIT) { setClass($('shelfedit'), 'open', false); openSettings(); st.row = rowsNow.length - 2; updateFocus(); return; }
+    if (st.zone === Z.DETAIL && hasClass($('detail'), 'playing')) { setClass($('detail'), 'playing', false); $('detail').querySelector('.video').innerHTML = ''; return; }
     if (sheetOpen()) { closeSheets(); return; }
     if (st.zone === Z.DRAWER) { closeDrawer(); return; }
     if (st.zone !== Z.SHELF && shelf.length) { st.zone = Z.SHELF; updateFocus(); return; }
@@ -716,12 +1308,13 @@
   /** The pointer focuses what it's over (the Magic Remote, or a mouse when previewing). */
   function hover(node, zone, index) {
     node.onmouseover = function () {
-      if (saverOn || (sheetOpen() !== (zone === Z.APPS || zone === Z.SETTINGS || zone === Z.EDIT))) return;
+      if (saverOn || (sheetOpen() !== (zone === Z.APPS || zone === Z.SETTINGS || zone === Z.EDIT || zone === Z.DETAIL))) return;
       if (zone === Z.DRAWER && st.zone !== Z.DRAWER) return;
       if (zone !== Z.DRAWER && st.zone === Z.DRAWER && zone !== Z.SHELF) return;
       if (zone === Z.SHELF && st.zone === Z.DRAWER) closeDrawer();
       st.zone = zone;
-      if (zone === Z.TOP) { st.top = index; if (index < 3) selectTab(index); }
+      if (zone === Z.TOP) { st.top = index; if (index < NT) selectTab(index); }
+      else if (zone === Z.DETAIL) st.action = index;
       else if (zone === Z.CARDS) st.card = index;
       else if (zone === Z.SHELF) st.shelf = index;
       else if (zone === Z.DRAWER) st.drawer = index;
@@ -753,7 +1346,11 @@
   var saverOn = false, idleAt = Date.now(), saverIndex = 0, saverTimer = 0, SAVER_AFTER = 5 * 60000;
 
   function showSaver() {
+    hideLive();
+    stopCardTrailer();
     var photos = Data.showcase().filter(function (p) { return p.backdrop && Data.appFor(p.app); });
+    var refs = Plus.hub().refs || [];
+    for (var r = 0; r < refs.length; r++) photos.splice(Math.min(photos.length, r * 2 + 1), 0, {ref: Plus.hubUrl(refs[r]), title: tr('Referência do dia', 'Reference of the day', 'Referencia del día')});
     saverOn = true;
     var s = $('saver');
     s.innerHTML = '';
@@ -763,15 +1360,18 @@
     el('div', 'time', clock);
     el('div', 'date', clock);
     el('div', 'title', clock);
+    var vv = Plus.verse(), verse = el('div', 'verse', s);
+    el('div', 'text', verse, '“' + vv.text + '”');
+    el('div', 'ref', verse, vv.ref);
     var front = a;
     function next() {
       if (!saverOn) return;
       var p = photos.length ? photos[saverIndex++ % photos.length] : null;
       var back = front === a ? b : a;
       if (p) {
-        back.style.backgroundImage = 'url(' + Data.image(p.backdrop, 'original') + ')';
+        back.style.backgroundImage = 'url(' + (p.ref || Data.image(p.backdrop, 'original')) + ')';
         back.style.webkitTransform = back.style.transform = 'scale(1.0)';
-        clock.lastChild.textContent = p.title;
+        clock.lastChild.textContent = p.title + (p.service ? '  ·  ' + tr('na ', 'on ', 'en ') + p.service : '');
         setTimeout(function () {
           setClass(back, 'on', true);
           setClass(front, 'on', false);
@@ -800,6 +1400,7 @@
     saverOn = false;
     clearTimeout(saverTimer);
     setClass($('saver'), 'on', false);
+    placeLive();
   }
 
   function poke() {
@@ -810,18 +1411,22 @@
 
   // MARK: - Keys
 
-  document.addEventListener('keydown', function (e) {
+  function onKey(e) {
     var k = e.keyCode;
     if (poke()) { e.preventDefault(); return; }   // the first press only wakes the screen
+    if (window.Fun && Fun.key(k)) { e.preventDefault(); return; }
+    if (window.More && More.key(k)) { e.preventDefault(); return; }
     if (k === TV.keys.left) move(-1, 0);
     else if (k === TV.keys.right) move(1, 0);
     else if (k === TV.keys.up) move(0, -1);
     else if (k === TV.keys.down) move(0, 1);
+    else if (k === TV.keys.ok && playerOn()) { var vid = $('player').querySelector('video'); if (vid) { if (vid.paused) vid.play(); else vid.pause(); } }
     else if (k === TV.keys.ok) activate();
     else if (k === TV.keys.back || k === 27 || k === 8) back();
     else return;
     e.preventDefault();
-  });
+  }
+  document.addEventListener('keydown', onKey);
   document.addEventListener('mousemove', function () { poke(); });
 
   // MARK: - Start
@@ -861,7 +1466,11 @@
     updateFocus();
   }
 
+  Plus.onChange(renderCards);
+  var hubWas = false;
+  Plus.onHub(function () { var on = Plus.hub().online; if (on !== hubWas) { hubWas = on; renderDrawer(); } });
   Data.onChange(function () {
+    Plus.refresh();
     renderQuotes();
     renderCards();
     renderPanels();
@@ -879,7 +1488,7 @@
   document.addEventListener('webOSRelaunch', reopened);   // LG: opened again while running
   window.addEventListener('appcontrol', reopened);        // Samsung: the same
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { hideSaver(); return; }
+    if (document.hidden) { hideSaver(); hideLive(); stopCardTrailer(); return; }
     idleAt = Date.now();
     loadApps(function () { renderShelf(); renderDrawer(); updateFocus(); Data.refresh(); });
   });
@@ -891,7 +1500,10 @@
     renderAll();
     Data.refresh();
   });
+  renderStats();
+  setInterval(renderStats, 3000);
   setInterval(function () {
+    setTitle();
     renderClock();
     checkNight();
     Data.refresh();
@@ -899,6 +1511,13 @@
     if (saverOn) tickSaverClock($('saver').querySelector('.clock'));
   }, 30000);
 
+  // What more.js builds on.
+  window.Home = {$: $, el: el, setClass: setClass, greeting: greeting, openPanel: openPanel, toast: toast,
+    openDetail: openDetail, wake: poke,
+    backToTop: function () { if (st.zone === 'island') { st.zone = Z.TOP; updateFocus(); } },
+    openLive: function () { var live = liveTV(); if (live) launcher(live.id, tr('TV aberta', 'Live TV', 'TV en vivo'))(); },
+    launch: function (id, title) { launcher(id, title)(); }, playing: function () { return playerOn(); }, idleAt: function () { return idleAt; }};
+
   // For the browser preview and tests.
-  window.FreeMyTV = {state: st, move: move, activate: activate, back: back, showSaver: showSaver, hideSaver: hideSaver, toast: toast};
+  window.FreeMyTV = {press: function (k) { onKey({keyCode: k, preventDefault: function () {}}); }, state: st, move: move, activate: activate, back: back, showSaver: showSaver, hideSaver: hideSaver, toast: toast};
 })();
