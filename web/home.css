@@ -700,30 +700,14 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   white-space: nowrap;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
   opacity: 0;
-  /* Out of sight above the screen, narrow and squeezed: entering, it's pulled down from the TV's top edge. */
-  -webkit-transform: translateY(-96px) scale(0.35, 0.8);
-  transform: translateY(-96px) scale(0.35, 0.8);
-  -webkit-transform-origin: 50% 0;
-  transform-origin: 50% 0;
-  -webkit-transition: opacity 0.35s 0.15s, -webkit-transform 0.45s cubic-bezier(0.5, 0, 0.75, 0), width 0.5s cubic-bezier(0.3, 1.3, 0.5, 1), height 0.5s cubic-bezier(0.3, 1.3, 0.5, 1), margin-left 0.5s cubic-bezier(0.3, 1.3, 0.5, 1), border-radius 0.5s;
-  transition: opacity 0.35s 0.15s, transform 0.45s cubic-bezier(0.5, 0, 0.75, 0), width 0.5s cubic-bezier(0.3, 1.3, 0.5, 1), height 0.5s cubic-bezier(0.3, 1.3, 0.5, 1), margin-left 0.5s cubic-bezier(0.3, 1.3, 0.5, 1), border-radius 0.5s;
+  /* Entering and leaving are drawn on #islandfx (liquid flowing out of the top edge); the pill shows when it lands. */
+  -webkit-transition: opacity 0.12s, width 0.5s cubic-bezier(0.3, 1.3, 0.5, 1), height 0.5s cubic-bezier(0.3, 1.3, 0.5, 1), margin-left 0.5s cubic-bezier(0.3, 1.3, 0.5, 1), border-radius 0.5s;
+  transition: opacity 0.12s, width 0.5s cubic-bezier(0.3, 1.3, 0.5, 1), height 0.5s cubic-bezier(0.3, 1.3, 0.5, 1), margin-left 0.5s cubic-bezier(0.3, 1.3, 0.5, 1), border-radius 0.5s;
   z-index: 7;
 }
-#island.on { opacity: 1; -webkit-transform: none; transform: none;
-  -webkit-animation: pulled 0.75s cubic-bezier(0.2, 0.8, 0.25, 1); animation: pulled 0.75s cubic-bezier(0.2, 0.8, 0.25, 1); }
-/* Pulled down past its place, a stretch, then it settles: like a sheet coming out from behind the bezel. */
-@-webkit-keyframes pulled {
-  0% { -webkit-transform: translateY(-96px) scale(0.35, 0.8); opacity: 1; }
-  45% { -webkit-transform: translateY(10px) scale(1.04, 1.12); }
-  70% { -webkit-transform: translateY(-3px) scale(0.98, 0.96); }
-  100% { -webkit-transform: none; }
-}
-@keyframes pulled {
-  0% { transform: translateY(-96px) scale(0.35, 0.8); opacity: 1; }
-  45% { transform: translateY(10px) scale(1.04, 1.12); }
-  70% { transform: translateY(-3px) scale(0.98, 0.96); }
-  100% { transform: none; }
-}
+#island.on { opacity: 1; }
+#islandfx { position: absolute; left: 0; top: 0; width: 1920px; height: 260px; z-index: 8; pointer-events: none; }
+
 #island.big { width: 640px; height: 132px; margin-left: -320px; border-radius: 46px; }
 #island .art {
   position: absolute;
@@ -855,7 +839,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #welcome .verse .ref { margin-top: 10px; font-size: 24px; font-weight: 600; color: rgba(255, 255, 255, 0.5); }
 #welcome .bar { position: absolute; left: 0; bottom: 0; height: 6px; width: 1920px; background: rgba(255, 255, 255, 0.35);
   -webkit-transform-origin: 0 0; transform-origin: 0 0; -webkit-transform: scaleX(0); transform: scaleX(0); }
-#welcome.on .bar { -webkit-transform: scaleX(1); transform: scaleX(1); -webkit-transition: -webkit-transform 15s linear; transition: transform 15s linear; }
+#welcome.on .bar { -webkit-transform: scaleX(1); transform: scaleX(1); -webkit-transition: -webkit-transform 5s linear; transition: transform 5s linear; }
 
 /* Still there? */
 #stillthere { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; z-index: 10; display: none; text-align: center; color: #FFF; background: rgba(0, 0, 0, 0.85); }

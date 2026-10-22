@@ -84,14 +84,104 @@ var More = (function () {
     return out;
   }
 
+  // MARK: - Liquid entrance: the pill flows out of the top edge at its own size on a neck that pinches and snaps
+
+  var fx = null, fxRaf = 0, fxBusy = false;
+
+  function fxEase(t) { return 1 - Math.pow(1 - t, 3); }
+  function fxBack(t) { var s = 1.7; t -= 1; return t * t * ((s + 1) * t + s) + 1; }
+  function fxClamp(t) { return t < 0 ? 0 : t > 1 ? 1 : t; }
+
+  /** One frame of the flow at t (0 → 1), for a pill pw × ph whose top rests at py. */
+  function fxDraw(t, pw, ph, py) {
+    var g = fx.getContext('2d'), CX = 960, half = pw / 2, r = Math.min(ph, 52) / 2;
+    g.clearRect(0, 0, 1920, 260);
+    g.fillStyle = '#000';
+    var b = fxClamp(t / 0.62), y = -ph + (py + ph) * fxBack(b);
+    var pinch = fxClamp((t - 0.15) / 0.45), snap = fxClamp((t - 0.55) / 0.35);
+    if (snap < 1) {
+      var waist = half * (1 - 0.92 * fxEase(pinch)), mid = Math.max(4, y * 0.5);
+      g.beginPath();
+      if (!snap) {
+        g.moveTo(CX - half, -2);
+        g.bezierCurveTo(CX - half, mid * 0.6, CX - waist, mid * 0.6, CX - waist, mid);
+        g.bezierCurveTo(CX - waist, mid + (y - mid) * 0.5, CX - half + r * 0.4, y - 2, CX - half + r, y + 2);
+        g.lineTo(CX + half - r, y + 2);
+        g.bezierCurveTo(CX + half - r * 0.4, y - 2, CX + waist, mid + (y - mid) * 0.5, CX + waist, mid);
+        g.bezierCurveTo(CX + waist, mid * 0.6, CX + half, mid * 0.6, CX + half, -2);
+        g.closePath();
+        g.fill();
+      } else {
+        var up = mid * (1 - fxEase(snap)), uw = waist * (1 - snap * 0.5), k = 1 - snap;
+        g.moveTo(CX - half * k, -2);
+        g.bezierCurveTo(CX - half * k, up * 0.6, CX - uw, up * 0.7, CX, up);
+        g.bezierCurveTo(CX + uw, up * 0.7, CX + half * k, up * 0.6, CX + half * k, -2);
+        g.closePath();
+        g.fill();
+        var bump = (y - mid) * 0.5 * (1 - fxEase(snap));
+        g.beginPath();
+        g.moveTo(CX - half + r, y + 2);
+        g.bezierCurveTo(CX - uw * 1.4, y, CX - uw * 0.6, y - bump, CX, y - bump);
+        g.bezierCurveTo(CX + uw * 0.6, y - bump, CX + uw * 1.4, y, CX + half - r, y + 2);
+        g.closePath();
+        g.fill();
+      }
+    }
+    var land = fxClamp((t - 0.5) / 0.5), wob = Math.sin(land * Math.PI * 2.5) * (1 - land) * 7, h = ph - wob * 0.6, rad = Math.min(h / 2, ph > 60 ? 46 : h / 2);
+    var x = CX - half - wob, w = pw + wob * 2, top = y + wob * 0.3;
+    g.beginPath();
+    g.moveTo(x + rad, top);
+    g.arcTo(x + w, top, x + w, top + h, rad);
+    g.arcTo(x + w, top + h, x, top + h, rad);
+    g.arcTo(x, top + h, x, top, rad);
+    g.arcTo(x, top, x + w, top, rad);
+    g.closePath();
+    g.fill();
+  }
+
+  /** Runs the flow in (dir 1) or back up into the edge (dir -1), then done(). */
+  function fxRun(dir, pw, ph, done) {
+    fx = fx || $('islandfx');
+    cancelAnimationFrame(fxRaf);
+    fxBusy = true;
+    var t0 = Date.now(), dur = dir > 0 ? 1000 : 650;
+    (function frame() {
+      var t = fxClamp((Date.now() - t0) / dur);
+      fxDraw(dir > 0 ? t : 1 - t, pw, ph, 18);
+      if (t < 1) { fxRaf = requestAnimationFrame(frame); return; }
+      fxBusy = false;
+      if (dir < 0) fx.getContext('2d').clearRect(0, 0, 1920, 260);
+      if (done) done();
+    })();
+  }
+
+  var shownOn = false;
+
   function render() {
     var box = $('island'), items = list();
     if (focused && !items.length) { unfocus(); return; }
     idx = Math.min(idx, Math.max(0, items.length - 1));
     var a = focused ? items[idx] : flashing || items[0], big = expanded || (!focused && !!flashing);
-    setClass(box, 'on', !!a);
     setClass(box, 'focus', focused);
-    if (!a) { shownKey = ''; return; }
+    if (!a) {
+      shownKey = '';
+      if (shownOn) {
+        shownOn = false;
+        var bigNow = hasBig(box);
+        setClass(box, 'on', false);
+        fxRun(-1, bigNow ? 640 : 300, bigNow ? 132 : 52);
+      }
+      return;
+    }
+    if (!shownOn) {
+      // Entering: the liquid flows out first, the pill (with its content) appears where it lands.
+      shownOn = true;
+      var willBig = expanded || (!focused && !!flashing);
+      fxRun(1, willBig ? 640 : 300, willBig ? 132 : 52, function () {
+        setClass(box, 'on', shownOn);
+        fx.getContext('2d').clearRect(0, 0, 1920, 260);
+      });
+    } else if (!fxBusy) setClass(box, 'on', true);
     var acts = expanded ? actions(a) : [];
     var key = JSON.stringify(a) + big + focused + act + acts.length + items.length + idx;
     if (key === shownKey) return;
@@ -119,6 +209,8 @@ var More = (function () {
     setClass(box, 'big', big);
     setClass(box, 'open', expanded);
   }
+
+  function hasBig(b) { return (' ' + b.className + ' ').indexOf(' big ') >= 0; }
 
   function collapse() { expanded = false; act = 0; shownKey = ''; render(); if (!list().length) unfocus(); }
 
@@ -417,7 +509,7 @@ var More = (function () {
     } else set('storm', null);
   }
 
-  // MARK: - Welcome (first time the screen is seen each day, 15 s) and the night summary (23 h)
+  // MARK: - Welcome (first time the screen is seen each day, 5 s) and the night summary (23 h)
 
   function welcome(tries) {
     if (stored('welcomed') === today()) return;
@@ -447,7 +539,7 @@ var More = (function () {
     el('div', 'ref', vv, v.ref);
     el('div', 'bar', box);
     setClass(box, 'on', true);
-    welcomeTimer = setTimeout(hideWelcome, 15000);
+    welcomeTimer = setTimeout(hideWelcome, 5000);
   }
   var welcomeTimer = 0;
   function hideWelcome() { clearTimeout(welcomeTimer); setClass($('welcome'), 'on', false); }
