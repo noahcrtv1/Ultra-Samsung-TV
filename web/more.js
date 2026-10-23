@@ -657,15 +657,21 @@ var More = (function () {
     checkIdle();
   }
 
+  // Rain on screen: one layer twice the screen's height, its streaks drawn once on a canvas, sliding down in a single
+  // animation (one moving layer instead of dozens of drops: each animation costs a full style pass on the TV).
   (function drops() {
-    var r = $('rain');
-    for (var i = 0; i < 40; i++) {
-      var d = el('i', '', r);
-      d.style.left = Math.round(Math.random() * 2000) + 'px';
-      d.style.webkitAnimationDelay = d.style.animationDelay = (-Math.random() * 1.2).toFixed(2) + 's';
-      d.style.webkitAnimationDuration = d.style.animationDuration = (0.7 + Math.random() * 0.5).toFixed(2) + 's';
-      d.style.opacity = (0.4 + Math.random() * 0.6).toFixed(2);
+    var c = document.createElement('canvas'), g = c.getContext('2d');
+    c.width = 960; c.height = 540;
+    g.lineCap = 'round';
+    for (var i = 0; i < 90; i++) {
+      var x = Math.random() * 980, y = Math.random() * 540, len = 30 + Math.random() * 40, a = 0.25 + Math.random() * 0.45;
+      var grad = g.createLinearGradient(x, y, x - len * 0.25, y + len);
+      grad.addColorStop(0, 'rgba(150,170,205,0)'); grad.addColorStop(1, 'rgba(150,170,205,' + a + ')');
+      g.strokeStyle = grad; g.lineWidth = 1.2 + Math.random() * 1.2;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x - len * 0.25, y + len); g.stroke();
     }
+    var sheet = el('div', 'sheet', $('rain'));
+    sheet.style.backgroundImage = 'url(' + c.toDataURL() + ')';
   })();
 
   refreshSchedule();

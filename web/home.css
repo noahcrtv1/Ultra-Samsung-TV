@@ -1076,3 +1076,10 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #fun .pguess { position: absolute; left: 1290px; right: 80px; top: 200px; }
 #fun .pg { padding: 12px 18px; margin-bottom: 8px; border-radius: 14px; background: rgba(255, 255, 255, 0.08); font-size: 26px; }
 #fun .pg.ok { background: #0A84FF; font-weight: 700; }
+
+/* Rain: a single sliding sheet (see more.js) */
+#rain .sheet { position: absolute; left: 0; top: -1080px; width: 1920px; height: 2160px; background-size: 1920px 1080px; background-repeat: repeat;
+  will-change: transform; -webkit-animation: rainfall 0.75s linear infinite; animation: rainfall 0.75s linear infinite; }
+@-webkit-keyframes rainfall { from { -webkit-transform: translate(0, 0); } to { -webkit-transform: translate(0, 1080px); } }
+@keyframes rainfall { from { transform: translate(0, 0); } to { transform: translate(0, 1080px); } }
+.night #rain .sheet { opacity: 0.9; }
