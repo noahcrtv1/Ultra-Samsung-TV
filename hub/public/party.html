@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b0b0f">
+<title>Jogar na TV</title>
+<style>
+  :root { --bg: #0b0b0f; --card: #1a1a20; --text: #f5f5f7; --dim: #9a9aa3; --accent: #ff9f0a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.4 -apple-system, system-ui, sans-serif; }
+  body { padding: 16px max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left)); }
+  h1 { font-size: 22px; margin: 4px 0 4px; }
+  .dim { color: var(--dim); font-size: 14px; }
+  input { width: 100%; font: inherit; color: var(--text); background: #26262e; border: 1px solid #2a2a32; border-radius: 14px; padding: 14px; }
+  button { font: inherit; font-weight: 700; color: var(--text); background: #26262e; border: 0; border-radius: 16px; padding: 16px; }
+  button:active { transform: scale(.97); }
+  .go { background: var(--accent); color: #000; width: 100%; margin-top: 10px; }
+  .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .opts button { min-height: 110px; font-size: 18px; }
+  .opts button:nth-child(1) { background: #0a84ff; } .opts button:nth-child(2) { background: #ff375f; }
+  .opts button:nth-child(3) { background: #ff9f0a; color: #000; } .opts button:nth-child(4) { background: #bf5af2; }
+  .opts button[disabled] { opacity: .35; }
+  .big { font-size: 26px; font-weight: 800; margin: 18px 0 6px; text-align: center; }
+  canvas { width: 100%; aspect-ratio: 16 / 10; background: #fff; border-radius: 16px; touch-action: none; display: block; margin-top: 10px; }
+  .colors { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .colors button { width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 3px solid transparent; }
+  .colors button.sel { border-color: #fff; }
+  .row { display: flex; gap: 8px; margin-top: 10px; }
+  .row > * { flex: 1; }
+  .score { margin-top: 18px; }
+  .score div { display: flex; justify-content: space-between; padding: 6px 2px; border-bottom: 1px solid #222; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<h1>🎮 Jogar na TV</h1>
+<div class="dim" id="status">Conectando…</div>
+
+<section id="join">
+  <p class="dim">Seu nome aparece no placar da TV.</p>
+  <input id="name" placeholder="Seu nome" maxlength="16" autocomplete="off">
+  <button class="go" id="enter">Entrar</button>
+</section>
+
+<section id="wait" hidden><div class="big">Esperando a TV…</div><p class="dim" style="text-align:center">Quando a rodada começar, aparece aqui.</p></section>
+
+<section id="quiz" hidden>
+  <div class="big" id="qtext"></div>
+  <div class="opts" id="opts"></div>
+  <p class="dim" id="qdone" hidden style="text-align:center">Resposta enviada. Olha a TV! 👀</p>
+</section>
+
+<section id="draw" hidden>
+  <div class="dim">Desenhe isto (só você vê):</div>
+  <div class="big" id="word"></div>
+  <canvas id="pad" width="800" height="500"></canvas>
+  <div class="colors" id="colors"></div>
+  <div class="row"><button id="clear">Apagar tudo</button></div>
+</section>
+
+<section id="guess" hidden>
+  <div class="big" id="hint"></div>
+  <p class="dim" style="text-align:center">Alguém está desenhando na TV. Que filme é?</p>
+  <input id="gtext" placeholder="Seu palpite" autocomplete="off">
+  <button class="go" id="send">Chutar</button>
+</section>
+
+<div class="score" id="score"></div>
+
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var me = localStorage.getItem('partyName') || '', state = {}, lastQ = '', padRound = -1;
+  function post(p, b) { b = b || {}; b.name = me; return fetch(p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); }
+  function show(id) { ['join', 'wait', 'quiz', 'draw', 'guess'].forEach(function (s) { $(s).hidden = s !== id; }); }
+
+  $('name').value = me;
+  $('enter').onclick = function () {
+    me = $('name').value.trim().slice(0, 16);
+    if (!me) return;
+    localStorage.setItem('partyName', me);
+    post('/api/party/join').then(poll);
+  };
+
+  function render() {
+    var s = state;
+    $('status').textContent = me ? 'Você: ' + me : 'Digite seu nome para entrar';
+    if (!me || !s.players || !s.players[me]) { show('join'); }
+    else if (s.mode === 'quiz' && s.question) {
+      show('quiz');
+      var key = s.round + s.question.text;
+      if (key !== lastQ) {
+        lastQ = key;
+        $('qtext').textContent = s.question.text;
+        $('opts').innerHTML = '';
+        s.question.options.forEach(function (o, i) {
+          var b = document.createElement('button');
+          b.textContent = o;
+          b.onclick = function () { post('/api/party/answer', { choice: i }); [].forEach.call($('opts').children, function (x) { x.disabled = x !== b; }); $('qdone').hidden = false; };
+          $('opts').appendChild(b);
+        });
+        $('qdone').hidden = true;
+      }
+      if (s.answered) { $('qdone').hidden = false; }
+    } else if (s.mode === 'draw') {
+      if (s.drawer === me) { if (padRound !== s.round) { padRound = s.round; g.clearRect(0, 0, 800, 500); } show('draw'); $('word').textContent = s.word; }
+      else { show('guess'); $('hint').textContent = s.hint; }
+    } else show('wait');
+    var sc = Object.keys(s.players || {}).map(function (n) { return [n, s.players[n].score || 0]; }).sort(function (a, b) { return b[1] - a[1]; });
+    $('score').innerHTML = sc.length ? '<div class="dim"><b>Placar</b></div>' + sc.map(function (x) { return '<div><span>' + x[0].replace(/</g, '&lt;') + '</span><b>' + x[1] + '</b></div>'; }).join('') : '';
+  }
+
+  function poll() { fetch('/api/party?name=' + encodeURIComponent(me)).then(function (r) { return r.json(); }).then(function (s) { state = s; render(); }).catch(function () { $('status').textContent = 'Sem conexão com a TV'; }); }
+  poll(); setInterval(poll, 1200);
+
+  // Drawing: strokes go to the TV as they're drawn (normalized 0..1).
+  var pad = $('pad'), g = pad.getContext('2d'), color = '#111', width = 8, cur = null, sent = 0;
+  ['#111', '#ff3b30', '#ff9f0a', '#ffd60a', '#0a84ff', '#bf5af2', '#8e5b3a', '#ffffff'].forEach(function (c, i) {
+    var b = document.createElement('button');
+    b.style.background = c; if (!i) b.className = 'sel';
+    b.onclick = function () { color = c; width = c === '#ffffff' ? 30 : 8; [].forEach.call($('colors').children, function (x) { x.className = x === b ? 'sel' : ''; }); };
+    $('colors').appendChild(b);
+  });
+  function pt(e) { var r = pad.getBoundingClientRect(), t = e.touches ? e.touches[0] : e; return [(t.clientX - r.left) / r.width, (t.clientY - r.top) / r.height]; }
+  function flush() { if (cur && cur.length > 1) post('/api/party/stroke', { points: cur, color: color, width: width }); if (cur) cur = [cur[cur.length - 1]]; }
+  function start(e) { e.preventDefault(); cur = [pt(e)]; }
+  function move(e) {
+    if (!cur) return; e.preventDefault();
+    var p = pt(e), q = cur[cur.length - 1];
+    g.strokeStyle = color; g.lineWidth = width; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(q[0] * 800, q[1] * 500); g.lineTo(p[0] * 800, p[1] * 500); g.stroke();
+    cur.push(p);
+    if (Date.now() - sent > 250) { sent = Date.now(); flush(); }
+  }
+  function end() { flush(); cur = null; }
+  pad.addEventListener('touchstart', start); pad.addEventListener('touchmove', move); pad.addEventListener('touchend', end);
+  pad.addEventListener('mousedown', start); pad.addEventListener('mousemove', move); addEventListener('mouseup', end);
+  $('clear').onclick = function () { g.clearRect(0, 0, 800, 500); post('/api/party/clear'); };
+  $('send').onclick = function () { var t = $('gtext').value.trim(); if (t) { post('/api/party/guess', { text: t }); $('gtext').value = ''; } };
+  $('gtext').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('send').onclick(); });
+</script>
+</body>
+</html>

@@ -1007,3 +1007,72 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 @keyframes g2in { from { transform: scale(0); } to { transform: scale(1); } }
 @-webkit-keyframes g2pop { 0% { -webkit-transform: scale(1); } 50% { -webkit-transform: scale(1.18); } 100% { -webkit-transform: scale(1); } }
 @keyframes g2pop { 0% { transform: scale(1); } 50% { transform: scale(1.18); } 100% { transform: scale(1); } }
+
+#fun .fgrid { -webkit-transition: -webkit-transform 0.3s ease-out; transition: transform 0.3s ease-out; }
+#fun .fgrid.small .ftile { width: 310px; height: 236px; padding: 30px; margin: 0 26px 26px 0; }
+#fun .fgrid.small .ftile .emoji { font-size: 72px; line-height: 88px; }
+#fun .fgrid.small .ftile .name { margin-top: 16px; font-size: 27px; }
+
+/* MARK: - Games */
+#fun .gcanvas { position: absolute; top: 180px; border-radius: 22px; }
+#fun .ginfo { position: absolute; left: 0; right: 0; top: 130px; text-align: center; font-size: 28px; font-weight: 600; color: rgba(255, 255, 255, 0.75); font-variant-numeric: tabular-nums; }
+/* memory */
+#fun .mgrid { position: absolute; left: 50%; top: 190px; width: 908px; margin-left: -454px; }
+#fun .mcard { float: left; width: 200px; height: 200px; margin: 0 27px 27px 0; -webkit-perspective: 900px; perspective: 900px; }
+#fun .mcard:nth-child(4n) { margin-right: 0; }
+#fun .minner { position: relative; width: 100%; height: 100%; -webkit-transform-style: preserve-3d; transform-style: preserve-3d;
+  -webkit-transition: -webkit-transform 0.45s; transition: transform 0.45s; }
+#fun .mcard.up .minner { -webkit-transform: rotateY(180deg); transform: rotateY(180deg); }
+#fun .mback, #fun .mfront { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 18px; -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+#fun .mback { background: #2C2C38; text-align: center; line-height: 200px; font-size: 64px; }
+#fun .mfront { background: #222 center 20% / cover; -webkit-transform: rotateY(180deg); transform: rotateY(180deg); }
+#fun .mcard.focus .minner { box-shadow: 0 0 0 5px #FFF; border-radius: 18px; }
+#fun .mcard.done { opacity: 0.55; }
+/* sudoku */
+#fun .sgrid::after { content: ''; display: block; clear: both; }
+#fun .sgrid { position: absolute; left: 50%; top: 175px; width: 720px; margin-left: -360px; background: #3A3A46; border-radius: 16px; padding: 6px; box-sizing: border-box; }
+#fun .scell { float: left; width: 72px; height: 72px; margin: 2px; border-radius: 8px; background: #1C1C24; text-align: center; line-height: 72px;
+  font-size: 36px; font-weight: 500; color: #64D2FF; }
+#fun .scell.fixed { color: #FFF; font-weight: 700; }
+#fun .scell.br { margin-right: 8px; }
+#fun .scell.bb { margin-bottom: 8px; }
+#fun .scell.same { background: #2C2C3A; }
+#fun .scell.bad { color: #FF453A; }
+#fun .scell.focus { background: #FFF; color: #000; }
+/* movie games */
+#fun .gposter { position: absolute; width: 420px; height: 630px; border-radius: 24px; background: #222 center / cover; box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5); }
+#fun .gposter.left { left: 260px; top: 200px; }
+#fun .gposter.reveal { left: 50%; top: 180px; width: 300px; height: 450px; margin-left: -150px; }
+#fun .gtitle { position: absolute; left: 800px; right: 120px; top: 260px; font-size: 48px; font-weight: 700; line-height: 1.15; }
+#fun .gyear { position: absolute; left: 800px; top: 420px; font-size: 200px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+#fun .gresult { position: absolute; left: 800px; right: 120px; top: 680px; font-size: 32px; font-weight: 600; color: #FFD60A; }
+#fun .gwave { position: absolute; left: 0; right: 0; top: 330px; text-align: center; font-size: 200px; -webkit-animation: pulse 1.2s ease-in-out infinite; animation: pulse 1.2s ease-in-out infinite; }
+@-webkit-keyframes pulse { 50% { -webkit-transform: scale(1.12); } }
+@keyframes pulse { 50% { transform: scale(1.12); } }
+#fun .gsound { position: absolute; left: 0; top: 0; width: 2px; height: 2px; opacity: 0.01; border: 0; }
+#fun .hlcard { position: absolute; top: 190px; width: 420px; text-align: center; }
+#fun .hlcard.l { left: 380px; } #fun .hlcard.r { left: 1120px; }
+#fun .hlcard .gposter { position: relative; width: 420px; height: 600px; }
+#fun .hlname { margin-top: 18px; font-size: 30px; font-weight: 700; }
+#fun .hlrate { margin-top: 8px; font-size: 56px; font-weight: 800; color: #FFD60A; }
+#fun .hlcard.ok .hlrate { color: #FFF; } #fun .hlcard.bad .hlrate { color: #FF453A; }
+#fun .hang { left: 220px !important; top: 220px !important; }
+#fun .hword { position: absolute; left: 640px; right: 100px; top: 260px; font-size: 56px; font-weight: 700; letter-spacing: 0.08em; line-height: 1.3; }
+#fun .hkb { position: absolute; left: 640px; top: 560px; width: 1100px; }
+#fun .hk { float: left; width: 100px; height: 84px; margin: 0 14px 14px 0; border-radius: 16px; background: rgba(255, 255, 255, 0.1); text-align: center; line-height: 84px; font-size: 36px; font-weight: 700; }
+#fun .hk.used { opacity: 0.3; } #fun .hk.hit { opacity: 1; background: #0A84FF; }
+#fun .hk.focus { background: #FFF; color: #000; opacity: 1; }
+/* party */
+#fun .plink { position: absolute; left: 0; right: 0; top: 230px; text-align: center; font-size: 54px; font-weight: 800; color: #FFD60A; }
+#fun .psub { position: absolute; left: 0; right: 0; top: 320px; text-align: center; font-size: 28px; color: rgba(255, 255, 255, 0.6); }
+#fun .pscore { position: absolute; left: 50%; top: 420px; width: 700px; margin-left: -350px; }
+#fun .pscore.side { left: auto; right: 80px; top: 200px; width: 420px; margin: 0; padding: 20px; border-radius: 24px; background: rgba(0, 0, 0, 0.75); }
+#fun .prow { display: block; height: 58px; line-height: 58px; padding: 0 20px; margin-bottom: 8px; border-radius: 16px; background: rgba(255, 255, 255, 0.08); font-size: 30px; font-weight: 600; }
+#fun .prow .pp { float: right; font-variant-numeric: tabular-nums; }
+#fun .prow.got { background: #0A84FF; }
+#fun .pclock { position: absolute; right: 90px; top: 70px; font-size: 64px; font-weight: 800; font-variant-numeric: tabular-nums; }
+#fun .pwho { position: absolute; left: 0; right: 0; top: 140px; text-align: center; font-size: 26px; color: rgba(255, 255, 255, 0.6); }
+#fun .phint { position: absolute; left: 110px; top: 900px; font-size: 44px; font-weight: 800; letter-spacing: 0.08em; }
+#fun .pguess { position: absolute; left: 1290px; right: 80px; top: 200px; }
+#fun .pg { padding: 12px 18px; margin-bottom: 8px; border-radius: 14px; background: rgba(255, 255, 255, 0.08); font-size: 26px; }
+#fun .pg.ok { background: #0A84FF; font-weight: 700; }

@@ -228,11 +228,51 @@ function media() {
   try { return fs.readdirSync(config.mediaDir).filter((f) => /\.(mp4|m4v|mov|webm)$/i.test(f)).sort(); } catch (e) { return []; }
 }
 
+// MARK: - Party games (the TV hosts, phones play): a room with players, the current round, answers, a drawing
+
+let party = { mode: null, round: 0, question: null, drawer: '', word: '', players: {}, answers: {}, strokes: [], guesses: [] };
+
+function partyView(name) {
+  return { mode: party.mode, round: party.round, question: party.question, drawer: party.drawer,
+    word: name && name === party.drawer ? party.word : '', hint: party.word ? party.word.replace(/[^\s]/g, '_') : '',
+    players: party.players, answered: name ? party.answers[name] !== undefined : false };
+}
+
+async function partyRoute(req, res, p, url) {
+  const b = req.method === 'POST' ? await body(req) : {};
+  const name = String(b.name || url.searchParams.get('name') || '').trim().slice(0, 16);
+  if (p === '/api/party') return send(res, 200, partyView(name));
+  if (p === '/api/party/tv') return send(res, 200, Object.assign(partyView(), { answers: party.answers, guesses: party.guesses, strokes: party.strokes }));
+  if (p === '/api/party/join' && name) { if (!party.players[name]) party.players[name] = { score: 0 }; return send(res, 200, { ok: true }); }
+  if (p === '/api/party/answer' && name && party.mode === 'quiz' && party.answers[name] === undefined) { party.answers[name] = +b.choice; return send(res, 200, { ok: true }); }
+  if (p === '/api/party/stroke' && name && name === party.drawer && Array.isArray(b.points)) {
+    party.strokes.push({ c: String(b.color || '#000').slice(0, 9), w: +b.width || 8, p: b.points.slice(0, 400).map((x) => [+x[0] || 0, +x[1] || 0]) });
+    return send(res, 200, { ok: true });
+  }
+  if (p === '/api/party/clear' && name === party.drawer) { party.strokes = []; return send(res, 200, { ok: true }); }
+  if (p === '/api/party/guess' && name && party.mode === 'draw' && name !== party.drawer) {
+    party.guesses.push({ name, text: String(b.text || '').slice(0, 40), at: Date.now() });
+    return send(res, 200, { ok: true });
+  }
+  // The TV runs the game: starts a round, sets scores, ends it.
+  if (p === '/api/party/host' && req.method === 'POST') {
+    if (b.reset) party.players = {};
+    party.mode = b.mode || null; party.round = +b.round || 0; party.question = b.question || null;
+    party.drawer = b.drawer || ''; party.word = b.word || ''; party.answers = {}; party.strokes = []; party.guesses = [];
+    if (b.players) party.players = b.players;
+    return send(res, 200, { ok: true });
+  }
+  if (p === '/api/party/scores' && req.method === 'POST') { if (b.players) party.players = b.players; return send(res, 200, { ok: true }); }
+  return send(res, 400, { error: 'party' });
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
   if (req.method === 'OPTIONS') return send(res, 204, '');
 
+  if (p.startsWith('/api/party')) return partyRoute(req, res, p, url);
+  if (p === '/party') return file(req, res, path.join(ROOT, 'public'), 'party.html');
   if (p === '/api/tv/state') {
     return send(res, 200, { reminder: saved.reminder || null, mac, music, refs: refs(), cast: saved.cast || null, at: Date.now() });
   }

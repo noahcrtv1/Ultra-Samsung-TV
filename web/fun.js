@@ -62,10 +62,10 @@ var Fun = (function () {
 
   // MARK: - A focusable list of tiles (menus): arrows move, OK runs, Back closes
 
-  function menu(title, items, cols) {
+  function menu(title, items, cols, small) {
     open(function (b) {
       el('div', 'ftitle', b, title);
-      var grid = el('div', 'fgrid', b), i = 0;
+      var grid = el('div', 'fgrid' + (small ? ' small' : ''), b), i = 0;
       cols = cols || 4;
       items.forEach(function (it, n) {
         var t = el('div', 'ftile', grid);
@@ -75,7 +75,12 @@ var Fun = (function () {
         t.onclick = function () { it.run(); };
         t.onmouseover = function () { i = n; focus(); };
       });
-      function focus() { for (var n = 0; n < grid.children.length; n++) setClass(grid.children[n], 'focus', n === i); }
+      function focus() {
+        for (var n = 0; n < grid.children.length; n++) setClass(grid.children[n], 'focus', n === i);
+        // Rows below the screen scroll up into view.
+        var row = Math.floor(i / cols), rowH = small ? 262 : 326, shift = Math.max(0, row - (small ? 2 : 1)) * rowH;
+        grid.style.webkitTransform = grid.style.transform = shift ? 'translateY(' + -shift + 'px)' : '';
+      }
       focus();
       return {key: function (k) {
         if (k === K.left) i = Math.max(0, i - 1);
@@ -109,7 +114,7 @@ var Fun = (function () {
       {emoji: '🔥', label: tr('Lareira', 'Fireplace', 'Chimenea'), run: function () { ambient('fire'); }},
       {emoji: '🐠', label: tr('Aquário', 'Aquarium', 'Acuario'), run: function () { ambient('fish'); }},
       {emoji: '🌧', label: tr('Chuva na janela', 'Rain on the window', 'Lluvia'), run: function () { ambient('rain'); }},
-      {emoji: '🔢', label: '2048', sub: tr('Recorde: ', 'Best: ', 'Récord: ') + (stored('best2048') || 0), run: game2048},
+      {emoji: '🎮', label: tr('Jogos', 'Games', 'Juegos'), run: function () { if (window.Games) Games.menu(); else game2048(); }},
       {emoji: '🎬', label: tr('O que ver hoje?', 'What to watch?', '¿Qué ver?'), run: whatToWatch}
     ], 3);
   }
@@ -801,6 +806,9 @@ var Fun = (function () {
   Plus.onChange(premieres);
 
   return {
+    // What games.js builds on.
+    api: {open: open, close: close, menu: menu, loading: loading, rnd: rnd, shuffled: shuffled, store: store, stored: stored, img: img,
+      show: show, discover: discover, game2048: game2048},
     whatToWatch: whatToWatch,
     stopRadio: stopRadio,
     relax: relax,
