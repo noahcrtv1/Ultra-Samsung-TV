@@ -114,9 +114,25 @@ var Fun = (function () {
       {emoji: '🔥', label: tr('Lareira', 'Fireplace', 'Chimenea'), run: function () { ambient('fire'); }},
       {emoji: '🐠', label: tr('Aquário', 'Aquarium', 'Acuario'), run: function () { ambient('fish'); }},
       {emoji: '🌧', label: tr('Chuva na janela', 'Rain on the window', 'Lluvia'), run: function () { ambient('rain'); }},
-      {emoji: '🎮', label: tr('Jogos', 'Games', 'Juegos'), run: function () { if (window.Games) Games.menu(); else game2048(); }},
+      {emoji: '🎮', label: tr('Jogos', 'Games', 'Juegos'), run: openGames},
       {emoji: '🎬', label: tr('O que ver hoje?', 'What to watch?', '¿Qué ver?'), run: whatToWatch}
     ], 3);
+  }
+
+  /** The games load on first use (about 100 KB of code the home screen doesn't need at start). */
+  var GAME_FILES = ['games.js', 'games-puzzles.js', 'games-movies.js', 'games-party.js'];
+  function openGames() {
+    if (window.Games && Games.ready) { Games.menu(); return; }
+    loading(tr('Abrindo os jogos…', 'Opening the games…', 'Abriendo los juegos…'));
+    var i = 0;
+    (function next() {
+      if (i >= GAME_FILES.length) { Games.ready = true; Games.menu(); return; }
+      var sc = document.createElement('script');
+      sc.src = GAME_FILES[i++];
+      sc.onload = next;
+      sc.onerror = function () { H.toast(tr('Não deu para abrir os jogos', "Couldn't open the games", 'No se pudieron abrir')); };
+      document.body.appendChild(sc);
+    })();
   }
 
   // MARK: - The genre wheel

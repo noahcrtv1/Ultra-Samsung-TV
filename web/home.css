@@ -865,31 +865,31 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 
 /* MARK: - Rain on screen: falling streaks over the background */
 #rain { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; opacity: 0; -webkit-transition: opacity 2s; transition: opacity 2s; pointer-events: none; }
-.raining #rain { opacity: 1; }
+#sky.raining #rain { opacity: 1; }
 #rain i { position: absolute; top: -120px; width: 3px; height: 110px; will-change: transform;
   background: -webkit-linear-gradient(top, rgba(70, 95, 140, 0), rgba(70, 95, 140, 0.75)); background: linear-gradient(rgba(70, 95, 140, 0), rgba(70, 95, 140, 0.75));
   -webkit-animation: fall 0.9s linear infinite; animation: fall 0.9s linear infinite; }
 .night #rain i { background: -webkit-linear-gradient(top, rgba(200, 215, 240, 0), rgba(200, 215, 240, 0.65)); background: linear-gradient(rgba(200, 215, 240, 0), rgba(200, 215, 240, 0.65)); }
 @-webkit-keyframes fall { to { -webkit-transform: translate(-60px, 1300px); } }
 @keyframes fall { to { transform: translate(-60px, 1300px); } }
-.storming #rain { -webkit-animation: lightning 5s infinite; animation: lightning 5s infinite; }
+#sky.storming #rain { -webkit-animation: lightning 5s infinite; animation: lightning 5s infinite; }
 @-webkit-keyframes lightning { 0%, 93%, 100% { background: transparent; } 94% { background: rgba(255, 255, 255, 0.75); } 95% { background: transparent; } 96% { background: rgba(255, 255, 255, 0.45); } }
 @keyframes lightning { 0%, 93%, 100% { background: transparent; } 94% { background: rgba(255, 255, 255, 0.75); } 95% { background: transparent; } 96% { background: rgba(255, 255, 255, 0.45); } }
 
 /* MARK: - Mood tint from the focused title's genre */
 #sky .mood { position: absolute; left: 0; top: 0; width: 100%; height: 100%; opacity: 0; will-change: opacity; -webkit-transition: opacity 0.8s; transition: opacity 0.8s; }
-.mood-horror #sky .mood { background: #5A0000; opacity: 0.55; }
-.mood-comedy #sky .mood { background: #FFC93C; opacity: 0.22; }
-.mood-family #sky .mood { background: #4FC3F7; opacity: 0.2; }
-.mood-scifi #sky .mood { background: #3B2A8C; opacity: 0.35; }
-.mood-romance #sky .mood { background: #FF6F91; opacity: 0.22; }
-.mood-action #sky .mood { background: #FF6A00; opacity: 0.22; }
-.mood-drama #sky .mood { background: #2E4A62; opacity: 0.25; }
-.mood-docs #sky .mood { background: #3E7C59; opacity: 0.2; }
-.mood-horror #title, .mood-horror .tab.on, .mood-horror .card .name { color: #F5F5F7; }
-.mood-horror .tab, .mood-horror #verse, .mood-horror .card .meta { color: rgba(245, 245, 247, 0.65); }
+#sky.mood-horror .mood { background: #5A0000; opacity: 0.55; }
+#sky.mood-comedy .mood { background: #FFC93C; opacity: 0.22; }
+#sky.mood-family .mood { background: #4FC3F7; opacity: 0.2; }
+#sky.mood-scifi .mood { background: #3B2A8C; opacity: 0.35; }
+#sky.mood-romance .mood { background: #FF6F91; opacity: 0.22; }
+#sky.mood-action .mood { background: #FF6A00; opacity: 0.22; }
+#sky.mood-drama .mood { background: #2E4A62; opacity: 0.25; }
+#sky.mood-docs .mood { background: #3E7C59; opacity: 0.2; }
+#top.mood-horror #title, #top.mood-horror .tab.on, #top.mood-horror .card .name { color: #F5F5F7; }
+#top.mood-horror .tab, #top.mood-horror #verse, #top.mood-horror .card .meta { color: rgba(245, 245, 247, 0.65); }
 #stats { -webkit-transition: opacity 0.2s; transition: opacity 0.2s; }
-.top-buttons #stats { opacity: 0; }
+#top.top-buttons #stats { opacity: 0; }
 
 #detail .where { margin-top: 18px; font-size: 22px; line-height: 1.5; color: rgba(255, 255, 255, 0.78); }
 #detail .where .rent { color: rgba(255, 255, 255, 0.5); }
@@ -961,7 +961,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #fun .v16 { background: #F59563; } #fun .v32 { background: #F67C5F; } #fun .v64 { background: #F65E3B; } #fun .v128 { background: #EDCF72; }
 #fun .v256 { background: #EDCC61; } #fun .v512 { background: #EDC850; } #fun .v1024 { background: #EDC53F; } #fun .v2048, #fun .v4096 { background: #EDC22E; }
 #rain { display: none; }
-.raining #rain { display: block; }
+#sky.raining #rain { display: block; }
 #fun .rwrap { position: absolute; left: 0; right: 0; top: 180px; }
 #fun .rlabel:first-of-type { margin-top: 0; }
 
@@ -1083,3 +1083,6 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 @-webkit-keyframes rainfall { from { -webkit-transform: translate(0, 0); } to { -webkit-transform: translate(0, 1080px); } }
 @keyframes rainfall { from { transform: translate(0, 0); } to { transform: translate(0, 1080px); } }
 .night #rain .sheet { opacity: 0.9; }
+
+/* Each card on its own layer: lifting the focused one and sliding the row don't repaint the posters. */
+.card { will-change: transform; }

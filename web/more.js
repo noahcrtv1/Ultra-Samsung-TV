@@ -469,6 +469,7 @@ var More = (function () {
     countTimer = setInterval(function () {
       var a = activities.game;
       if (!game || game.state !== 'pre' || !a) { clearInterval(countTimer); countTimer = 0; return; }
+      if (document.hidden) return;
       var c = countdown(game.at);
       a.right = c;
       if (flashing && flashing.id === 'game') flashing.right = c;
@@ -542,12 +543,13 @@ var More = (function () {
   var weatherTest = null;   // {rain, storm} from the demo's test menu, instead of the real weather
 
   function weather() {
-    if (weatherTest) { setClass(document.body, 'raining', weatherTest.rain); setClass(document.body, 'storming', weatherTest.storm); return; }
+    if (weatherTest) { setClass($('sky'), 'raining', weatherTest.rain); setClass($('sky'), 'storming', weatherTest.storm); return; }
     var w = Data.weatherNow();
     if (!w) return;
     var raining = (w.code >= 51 && w.code <= 67) || (w.code >= 80 && w.code <= 82) || w.code >= 95;
-    setClass(document.body, 'raining', raining);
-    setClass(document.body, 'storming', w.code >= 95);
+    // On #sky, not body: a class on body makes the TV restyle the whole page.
+    setClass($('sky'), 'raining', raining);
+    setClass($('sky'), 'storming', w.code >= 95);
     if (w.storm) {
       var s = w.storm, what = s.kind === 'storm' ? 'Tempestade' : s.kind === 'rain' ? 'Chuva forte (' + Math.round(s.mm) + ' mm/h)' : 'Ventos de ' + Math.round(s.kmh) + ' km/h';
       var a = {priority: 3, icon: s.kind === 'wind' ? '💨' : '⛈', text: what + ' às ' + Data.hour(s.at), color: '#3A1F00',
@@ -645,13 +647,16 @@ var More = (function () {
   function mood(p) {
     var name = '';
     for (var i = 0; p && p.genres && i < MOODS.length && !name; i++) if (p.genres.indexOf(MOODS[i][0]) >= 0) name = MOODS[i][1];
-    var b = document.body;
-    b.className = b.className.replace(/\s*mood-\w+/g, '') + (name ? ' mood-' + name : '');
+    [$('sky'), $('top')].forEach(function (e) {
+      var c = e.className.replace(/\s*mood-\w+/g, '') + (name ? ' mood-' + name : '');
+      if (c !== e.className) e.className = c;   // unchanged: no restyle
+    });
   }
 
   // MARK: - Start
 
   function tick() {
+    if (document.hidden) return;
     weather();
     nightSummary();
     checkIdle();

@@ -169,7 +169,7 @@
     list = $('buttons').children;
     for (i = 0; i < list.length; i++) setClass(list[i], 'focus', st.zone === Z.TOP && st.top === NT + i);
     setClass($('quotes'), 'hide', st.zone === Z.TOP && st.top >= NT);
-    setClass(body, 'top-buttons', st.zone === Z.TOP && st.top >= NT);
+    setClass($('top'), 'top-buttons', st.zone === Z.TOP && st.top >= NT);
     list = $('cards').children;
     for (i = 0; i < list.length; i++) setClass(list[i], 'focus', st.zone === Z.CARDS && st.card === i);
     list = $('tiles').children;
@@ -1494,8 +1494,10 @@
     Data.refresh();
   });
   renderStats();
-  setInterval(renderStats, 3000);
+  // In the background (another app in front) nothing here runs: the app stays resident but idle.
+  setInterval(function () { if (!document.hidden) renderStats(); }, 10000);
   setInterval(function () {
+    if (document.hidden) return;
     setTitle();
     renderClock();
     checkNight();

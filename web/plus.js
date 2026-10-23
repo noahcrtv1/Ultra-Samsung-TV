@@ -305,7 +305,7 @@ var Plus = (function () {
     });
   }
 
-  if (HUB) { pollHub(); setInterval(pollHub, 4000); }
+  if (HUB) { pollHub(); setInterval(function () { if (!document.hidden) pollHub(); }, 6000); }
 
   /** Movie night: the Alexa routine (Voice Monkey), when its URL is set. */
   function popcorn() {
