@@ -294,7 +294,7 @@ var Fun = (function () {
   // MARK: - Today in film history: famous movies released on this day, years ago (cached for the day)
 
   function historyList(done) {
-    var d = new Date(), md = ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2), cache = stored('history');
+    var d = new Date(), md = ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2), cache = stored('history2');
     if (cache && cache.md === md) { done(cache.list); return; }
     var years = [], out = [];
     for (var y = d.getFullYear() - 1; y >= 1960; y--) years.push(y);
@@ -302,7 +302,7 @@ var Fun = (function () {
       if (!years.length) {
         out.sort(function (a, b) { return b.votes - a.votes; });
         out = out.slice(0, 8);
-        store('history', {md: md, list: out});
+        store('history2', {md: md, list: out});
         done(out);
         return;
       }
@@ -311,9 +311,11 @@ var Fun = (function () {
         var day = y + '-' + md;
         Data.tmdb('/discover/movie?language=' + I18N.locale() + '&primary_release_date.gte=' + day + '&primary_release_date.lte=' + day
             + '&sort_by=vote_count.desc&vote_count.gte=1500', function (e, r) {
-          (r && r.results || []).slice(0, 2).forEach(function (o) {
+          // Only films whose own release date is this day: the year shown is theirs, never the one asked for.
+          (r && r.results || []).forEach(function (o) {
+            if (o.release_date !== day) return;
             var p = Data.newPick(o, 'movie');
-            if (p) { p.year = y; p.votes = o.vote_count; out.push(p); }
+            if (p) { p.year = +o.release_date.slice(0, 4); p.votes = o.vote_count; out.push(p); }
           });
           if (--left === 0) next();
         });
@@ -687,61 +689,104 @@ var Fun = (function () {
 
   function game2048() {
     open(function (b) {
-      var grid = [], score = 0, best = stored('best2048') || 0, over = false;
+      // Tiles are their own elements: a move slides them (transform), a merge pops the result, a new tile grows in.
+      var tiles = [], score = 0, best = stored('best2048') || 0, over = false, nextId = 1, busy = false;
       el('div', 'ftitle', b, '2048');
       var info = el('div', 'g2info', b);
       var board = el('div', 'g2board', b);
+      for (var n = 0; n < 16; n++) el('div', 'g2cell', board);
+      var layer = el('div', 'g2tiles', board);
       el('div', 'hint', b, tr('Setas jogam · OK recomeça', 'Arrows play · OK restarts', 'Flechas juegan · OK reinicia'));
-      function reset() { grid = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; score = 0; over = false; add(); add(); render(); }
+
+      function pos(r, c) { return 'translate(' + (c * 168) + 'px,' + (r * 168) + 'px)'; }
+      function at(r, c) { for (var i = 0; i < tiles.length; i++) if (tiles[i].r === r && tiles[i].c === c && !tiles[i].gone) return tiles[i]; return null; }
+
+      function make(r, c, v, fresh) {
+        // Outer element: position (slides). Inner: the face, which scales on its own (grow in, pop).
+        var t = {id: nextId++, r: r, c: c, v: v, el: el('div', 'g2tile', layer)};
+        t.face = el('div', 'in v' + Math.min(v, 4096) + (fresh ? ' fresh' : ''), t.el, String(v));
+        t.el.style.webkitTransform = t.el.style.transform = pos(r, c);
+        if (v >= 1024) t.face.style.fontSize = '48px';
+        tiles.push(t);
+        return t;
+      }
+
       function add() {
         var free = [];
-        for (var i = 0; i < 16; i++) if (!grid[i]) free.push(i);
-        if (free.length) grid[free[rnd(free.length)]] = Math.random() < 0.9 ? 2 : 4;
+        for (var r = 0; r < 4; r++) for (var c = 0; c < 4; c++) if (!at(r, c)) free.push([r, c]);
+        if (free.length) { var f = free[rnd(free.length)]; make(f[0], f[1], Math.random() < 0.9 ? 2 : 4, true); }
       }
-      function line(idx) {
-        var vals = idx.map(function (i) { return grid[i]; }).filter(function (v) { return v; }), out = [];
-        for (var i = 0; i < vals.length; i++) {
-          if (vals[i] === vals[i + 1]) { out.push(vals[i] * 2); score += vals[i] * 2; i++; } else out.push(vals[i]);
-        }
-        while (out.length < 4) out.push(0);
-        var moved = false;
-        idx.forEach(function (i, n) { if (grid[i] !== out[n]) moved = true; grid[i] = out[n]; });
-        return moved;
+
+      function reset() {
+        layer.innerHTML = '';
+        tiles = []; score = 0; over = false;
+        add(); add();
+        renderInfo();
       }
-      function move(dir) {
-        if (over) return;
-        var moved = false;
-        for (var r = 0; r < 4; r++) {
-          var idx = [];
-          for (var c = 0; c < 4; c++) {
-            idx.push(dir === 'left' ? r * 4 + c : dir === 'right' ? r * 4 + 3 - c : dir === 'up' ? c * 4 + r : (3 - c) * 4 + r);
-          }
-          if (line(idx)) moved = true;
-        }
-        if (moved) add();
-        if (score > best) { best = score; store('best2048', best); }
-        over = !canMove();
-        render();
+
+      function move(dr, dc) {
+        if (over || busy) return;
+        var rows = [0, 1, 2, 3], cols = [0, 1, 2, 3], moved = false;
+        if (dr > 0) rows.reverse();
+        if (dc > 0) cols.reverse();
+        tiles.forEach(function (t) { t.merged = false; });
+        rows.forEach(function (r) {
+          cols.forEach(function (c) {
+            var t = at(r, c);
+            if (!t) return;
+            var nr = r, nc = c;
+            while (nr + dr >= 0 && nr + dr < 4 && nc + dc >= 0 && nc + dc < 4 && !at(nr + dr, nc + dc)) { nr += dr; nc += dc; }
+            var next = nr + dr >= 0 && nr + dr < 4 && nc + dc >= 0 && nc + dc < 4 ? at(nr + dr, nc + dc) : null;
+            if (next && next.v === t.v && !next.merged) {
+              // Slides onto the other tile, which doubles once they meet.
+              t.r = next.r; t.c = next.c; t.gone = true;
+              next.v *= 2; next.merged = true;
+              score += next.v;
+              moved = true;
+            } else if (nr !== r || nc !== c) {
+              t.r = nr; t.c = nc;
+              moved = true;
+            }
+          });
+        });
+        if (!moved) return;
+        busy = true;
+        tiles.forEach(function (t) { t.el.style.webkitTransform = t.el.style.transform = pos(t.r, t.c); setClass(t.face, 'fresh', false); });
+        setTimeout(function () {
+          tiles = tiles.filter(function (t) {
+            if (t.gone) { layer.removeChild(t.el); return false; }
+            if (t.merged) {
+              t.face.textContent = String(t.v);
+              t.face.className = 'in v' + Math.min(t.v, 4096) + ' pop';
+              if (t.v >= 1024) t.face.style.fontSize = '48px';
+            }
+            return true;
+          });
+          add();
+          if (score > best) { best = score; store('best2048', best); }
+          over = !canMove();
+          renderInfo();
+          busy = false;
+        }, 130);
       }
+
       function canMove() {
-        for (var i = 0; i < 16; i++) {
-          if (!grid[i]) return true;
-          if (i % 4 < 3 && grid[i] === grid[i + 1]) return true;
-          if (i < 12 && grid[i] === grid[i + 4]) return true;
+        for (var r = 0; r < 4; r++) for (var c = 0; c < 4; c++) {
+          var t = at(r, c);
+          if (!t) return true;
+          var right = c < 3 && at(r, c + 1), down = r < 3 && at(r + 1, c);
+          if ((right && right.v === t.v) || (down && down.v === t.v)) return true;
         }
         return false;
       }
-      function render() {
+
+      function renderInfo() {
         info.textContent = tr('Pontos ', 'Score ', 'Puntos ') + score + '   ·   ' + tr('Recorde ', 'Best ', 'Récord ') + best + (over ? '   ·   ' + tr('Fim! OK recomeça', 'Game over! OK restarts', '¡Fin!') : '');
-        board.innerHTML = '';
-        grid.forEach(function (v) {
-          var cell = el('div', 'g2cell v' + Math.min(v, 4096), board, v ? String(v) : '');
-          if (v >= 1024) cell.style.fontSize = '48px';
-        });
       }
+
       reset();
       return {key: function (k) {
-        if (k === K.left) move('left'); else if (k === K.right) move('right'); else if (k === K.up) move('up'); else if (k === K.down) move('down');
+        if (k === K.left) move(0, -1); else if (k === K.right) move(0, 1); else if (k === K.up) move(-1, 0); else if (k === K.down) move(1, 0);
         else if (k === K.ok) reset();
         else return false;
         return true;

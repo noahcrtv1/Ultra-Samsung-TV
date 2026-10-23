@@ -41,6 +41,12 @@
       });
       return {results: out.slice(0, 20)};
     }
+    // "On this day": the recorded titles released on that exact date (the recording is from another day).
+    var day = /primary_release_date\.gte=(\d{4}-\d\d-\d\d)&primary_release_date\.lte=\1/.exec(path);
+    if (day) {
+      return {results: Object.keys(items).filter(function (k) { return k.indexOf('movie:') === 0 && items[k].release_date === day[1]; })
+        .map(function (k) { return items[k]; })};
+    }
     var d = /^\/discover\/(movie|tv)/.exec(path);
     if (d) {
       var g = param(path, 'with_genres'), rt = param(path, 'with_runtime.lte'), keys = Object.keys(FIX).filter(function (k) {
