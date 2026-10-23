@@ -456,18 +456,7 @@
       if (p.backdrop) backdrop(Data.image(p.backdrop, 'w300'));
       if (window.More) More.mood(p);
     }, 450);
-    var index = st.card;
-    trailerTimer = setTimeout(function () {
-      Plus.trailer(p, function (key) {
-        if (!key || st.zone !== Z.CARDS || st.card !== index || saverOn) return;
-        var img = $('cards').children[index] && $('cards').children[index].firstChild;
-        if (!img) return;
-        var f = youtube(key, false);
-        if (!f) return;
-        trailerCard = index;
-        img.appendChild(f);
-      });
-    }, 4000);
+    // Trailers play only on the title's page: a YouTube player inside the card cost the TV too much memory.
   }
 
   // MARK: - A title's page: trailer behind, synopsis, where it is, My List
